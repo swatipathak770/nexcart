@@ -33,7 +33,8 @@ public class User {
     @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false)
+    @NotBlank(message = "Phone number is required")
+    @Column(nullable = false, unique = true)
     private String phoneNumber;
 
     private String profileImage;
