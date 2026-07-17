@@ -1,8 +1,12 @@
 package com.nexcart.service.impl;
 
+import com.nexcart.dto.request.LoginRequest;
 import com.nexcart.dto.request.RegisterRequest;
+import com.nexcart.dto.response.LoginResponse;
+import com.nexcart.dto.response.UserResponse;
 import com.nexcart.entity.User;
 import com.nexcart.entity.Role;
+import com.nexcart.exception.EmailAlreadyExistsException;
 import com.nexcart.repository.UserRepository;
 import com.nexcart.service.AuthService;
 import lombok.RequiredArgsConstructor;
@@ -20,24 +24,34 @@ public class AuthServiceImpl implements AuthService {
     public void register(RegisterRequest request) {
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already exists.");
+            throw new EmailAlreadyExistsException("Email already exists.");
         }
 
-        User user = new User();
+        User user = User.builder()
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .phoneNumber(request.getPhoneNumber())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(Role.CUSTOMER)
+                .enabled(true)
+                .accountNonExpired(true)
+                .accountNonLocked(true)
+                .credentialsNonExpired(true)
+                .build();
 
-        user.setFullName(request.getFullName());
-        user.setEmail(request.getEmail());
-        user.setPhoneNumber(request.getPhoneNumber());
+        User savedUser = userRepository.save(user);
 
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        UserResponse.builder()
+                .id(savedUser.getId())
+                .fullName(savedUser.getFullName())
+                .email(savedUser.getEmail())
+                .phoneNumber(savedUser.getPhoneNumber())
+                .role(savedUser.getRole())
+                .build();
+    }
 
-        user.setRole(Role.CUSTOMER);
-
-        user.setEnabled(true);
-        user.setAccountNonExpired(true);
-        user.setAccountNonLocked(true);
-        user.setCredentialsNonExpired(true);
-
-        userRepository.save(user);
+    @Override
+    public LoginResponse login(LoginRequest request) {
+        return null;
     }
 }
