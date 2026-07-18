@@ -1,15 +1,21 @@
 package com.nexcart.service.impl;
 
+import com.nexcart.config.JwtProperties;
 import com.nexcart.dto.request.LoginRequest;
 import com.nexcart.dto.request.RegisterRequest;
 import com.nexcart.dto.response.LoginResponse;
 import com.nexcart.dto.response.UserResponse;
 import com.nexcart.entity.User;
-import com.nexcart.entity.Role;
 import com.nexcart.exception.EmailAlreadyExistsException;
+import com.nexcart.mapper.UserMapper;
 import com.nexcart.repository.UserRepository;
+import com.nexcart.security.CustomUserDetails;
+import com.nexcart.security.jwt.JwtService;
 import com.nexcart.service.AuthService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -19,39 +25,48 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserMapper userMapper;
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
+    private final JwtProperties jwtProperties;
 
     @Override
-    public void register(RegisterRequest request) {
+    public UserResponse register(RegisterRequest request) {
 
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new EmailAlreadyExistsException("Email already exists.");
         }
 
-        User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
-                .phoneNumber(request.getPhoneNumber())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.CUSTOMER)
-                .enabled(true)
-                .accountNonExpired(true)
-                .accountNonLocked(true)
-                .credentialsNonExpired(true)
-                .build();
+        User user = userMapper.toEntity(request, passwordEncoder);
 
         User savedUser = userRepository.save(user);
 
-        UserResponse.builder()
-                .id(savedUser.getId())
-                .fullName(savedUser.getFullName())
-                .email(savedUser.getEmail())
-                .phoneNumber(savedUser.getPhoneNumber())
-                .role(savedUser.getRole())
-                .build();
+        return userMapper.toResponse(savedUser);
     }
 
     @Override
     public LoginResponse login(LoginRequest request) {
-        return null;
+
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.getEmail(),
+                        request.getPassword()
+                )
+        );
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() ->
+                        new UsernameNotFoundException("User not found"));
+
+        CustomUserDetails userDetails = new CustomUserDetails(user);
+
+        String token = jwtService.generateToken(userDetails);
+
+        return LoginResponse.builder()
+                .accessToken(token)
+                .tokenType("Bearer")
+                .expiresIn(jwtProperties.getExpiration())
+                .user(userMapper.toResponse(user))
+                .build();
     }
 }

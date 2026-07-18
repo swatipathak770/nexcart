@@ -4,6 +4,7 @@ import com.nexcart.dto.request.LoginRequest;
 import com.nexcart.dto.request.RegisterRequest;
 import com.nexcart.dto.response.ApiResponse;
 import com.nexcart.dto.response.LoginResponse;
+import com.nexcart.dto.response.UserResponse;
 import com.nexcart.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +22,20 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    public String register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<ApiResponse<UserResponse>> register(
+            @Valid @RequestBody RegisterRequest request) {
 
-        authService.register(request);
+        UserResponse response = authService.register(request);
 
-        return "User Registered Successfully";
+        ApiResponse<UserResponse> apiResponse =
+                ApiResponse.<UserResponse>builder()
+                        .success(true)
+                        .message("User registered successfully")
+                        .data(response)
+                        .timestamp(LocalDateTime.now())
+                        .build();
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
     }
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(

@@ -1,64 +1,71 @@
-package com.nexcart.security;
+package com.nexcart.security.jwt;
 
+import com.nexcart.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Service
+@RequiredArgsConstructor
 public class JwtService {
 
-    // Secret key used for signing JWT
-    private static final SecretKey SECRET_KEY =
-            Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    private final JwtProperties jwtProperties;
 
-    // Token validity: 24 hours
-    private static final long EXPIRATION = 1000 * 60 * 60 * 24;
+    private SecretKey getSigningKey() {
+        return Keys.hmacShaKeyFor(
+                jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8)
+        );
+    }
 
-    // Generate JWT Token
-    public String generateToken(String email) {
+    public String generateToken(UserDetails userDetails) {
+
+        Date now = new Date();
+
+        Date expiry =
+                new Date(now.getTime() + jwtProperties.getExpiration());
 
         return Jwts.builder()
-                .subject(email)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + EXPIRATION))
-                .signWith(SECRET_KEY)
+                .subject(userDetails.getUsername())
+                .issuedAt(now)
+                .expiration(expiry)
+                .signWith(getSigningKey())
                 .compact();
     }
 
-    // Extract email from JWT
-    public String extractEmail(String token) {
+    public String extractUsername(String token) {
 
-        return getClaims(token).getSubject();
+        return extractAllClaims(token).getSubject();
     }
 
-    // Validate JWT
-    public boolean isTokenValid(String token, String email) {
+    public boolean isTokenValid(String token,
+                                UserDetails userDetails) {
 
-        return extractEmail(token).equals(email)
+        String username = extractUsername(token);
+
+        return username.equals(userDetails.getUsername())
                 && !isTokenExpired(token);
     }
 
-    // Check expiration
     private boolean isTokenExpired(String token) {
 
-        return getClaims(token)
+        return extractAllClaims(token)
                 .getExpiration()
                 .before(new Date());
     }
 
-    // Read Claims
-    private Claims getClaims(String token) {
+    private Claims extractAllClaims(String token) {
 
         return Jwts.parser()
-                .verifyWith(SECRET_KEY)
+                .verifyWith(getSigningKey())
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
     }
-
 }
