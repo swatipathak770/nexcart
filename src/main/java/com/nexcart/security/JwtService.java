@@ -1,4 +1,4 @@
-package com.nexcart.security.jwt;
+package com.nexcart.security;
 
 import com.nexcart.config.JwtProperties;
 import io.jsonwebtoken.Claims;

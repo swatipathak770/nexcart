@@ -1,5 +1,6 @@
 package com.nexcart.controller;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.nexcart.dto.request.LoginRequest;
 import com.nexcart.dto.request.RegisterRequest;
 import com.nexcart.dto.response.ApiResponse;
@@ -13,14 +14,17 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-
+@Tag(
+        name = "Authentication",
+        description = "APIs for user registration and login"
+)
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-
+    @Operation(summary = "Register a new user")
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserResponse>> register(
             @Valid @RequestBody RegisterRequest request) {
@@ -37,6 +41,7 @@ public class AuthController {
 
         return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
     }
+    @Operation(summary = "Authenticate user and generate JWT token")
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
             @Valid @RequestBody LoginRequest request) {

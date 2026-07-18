@@ -1,0 +1,8 @@
+package com.nexcart.exception;
+
+public class CategoryAlreadyExistsException extends RuntimeException {
+
+    public CategoryAlreadyExistsException(String message) {
+        super(message);
+    }
+}

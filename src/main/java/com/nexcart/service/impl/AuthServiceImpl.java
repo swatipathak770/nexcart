@@ -10,7 +10,7 @@ import com.nexcart.exception.EmailAlreadyExistsException;
 import com.nexcart.mapper.UserMapper;
 import com.nexcart.repository.UserRepository;
 import com.nexcart.security.CustomUserDetails;
-import com.nexcart.security.jwt.JwtService;
+import com.nexcart.security.JwtService;
 import com.nexcart.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;

@@ -19,7 +19,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final com.nexcart.security.jwt.JwtService jwtService;
+    private final com.nexcart.security.JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
 
     @Override
