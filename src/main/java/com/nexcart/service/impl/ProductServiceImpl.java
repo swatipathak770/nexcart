@@ -13,6 +13,17 @@ import com.nexcart.repository.ProductRepository;
 import com.nexcart.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import com.nexcart.specification.ProductSpecification;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+
 
 import java.util.List;
 
@@ -43,14 +54,21 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public List<ProductResponse> getAllProducts() {
+    public Page<ProductResponse> getAllProducts(
+            int page,
+            int size,
+            String sortBy,
+            String direction) {
 
-        return productRepository.findAll()
-                .stream()
-                .map(productMapper::toResponse)
-                .toList();
+        Sort sort = direction.equalsIgnoreCase("desc")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        return productRepository.findAll(pageable)
+                .map(productMapper::toResponse);
     }
-
     @Override
     public ProductResponse getProductById(Long id) {
 
@@ -110,5 +128,44 @@ public class ProductServiceImpl implements ProductService {
         return brandRepository.findById(id)
                 .orElseThrow(() ->
                         new BrandNotFoundException("Brand not found."));
+    }
+    @Override
+    public List<ProductResponse> searchProducts(String keyword) {
+
+        return productRepository
+                .findByNameContainingIgnoreCase(keyword)
+                .stream()
+                .map(productMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> filterProducts(
+            String keyword,
+            String category,
+            String brand,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            int page,
+            int size,
+            String sortBy,
+            String direction) {
+
+        Sort sort = direction.equalsIgnoreCase("desc")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Specification<Product> specification =
+                ProductSpecification.hasKeyword(keyword)
+                        .and(ProductSpecification.hasCategory(category))
+                        .and(ProductSpecification.hasBrand(brand))
+                        .and(ProductSpecification.hasMinPrice(minPrice))
+                        .and(ProductSpecification.hasMaxPrice(maxPrice));
+
+        return productRepository.findAll(specification, pageable)
+                .map(productMapper::toResponse);
     }
 }

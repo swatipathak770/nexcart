@@ -10,7 +10,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 @Tag(
@@ -38,19 +41,34 @@ public class ProductController {
                         .timestamp(LocalDateTime.now())
                         .build());
     }
-    @Operation(summary = "Get all products")
+    @Operation(summary = "Get all products with pagination and sorting")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ProductResponse>>> getAllProducts() {
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> getAllProducts(
 
-        List<ProductResponse> response = productService.getAllProducts();
+            @RequestParam(defaultValue = "0") int page,
+
+            @RequestParam(defaultValue = "10") int size,
+
+            @RequestParam(defaultValue = "id") String sortBy,
+
+            @RequestParam(defaultValue = "asc") String direction) {
+
+        Page<ProductResponse> response =
+                productService.getAllProducts(
+                        page,
+                        size,
+                        sortBy,
+                        direction
+                );
 
         return ResponseEntity.ok(
-                ApiResponse.<List<ProductResponse>>builder()
+                ApiResponse.<Page<ProductResponse>>builder()
                         .success(true)
                         .message("Products fetched successfully")
                         .data(response)
                         .timestamp(LocalDateTime.now())
-                        .build());
+                        .build()
+        );
     }
     @Operation(summary = "Get product by ID")
     @GetMapping("/{id}")
@@ -97,5 +115,66 @@ public class ProductController {
                         .message("Product deleted successfully")
                         .timestamp(LocalDateTime.now())
                         .build());
+    }
+    @Operation(summary = "Search products by name")
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<ProductResponse>>> searchProducts(
+            @RequestParam String keyword) {
+
+        List<ProductResponse> response =
+                productService.searchProducts(keyword);
+
+        return ResponseEntity.ok(
+                ApiResponse.<List<ProductResponse>>builder()
+                        .success(true)
+                        .message("Products fetched successfully")
+                        .data(response)
+                        .timestamp(LocalDateTime.now())
+                        .build()
+        );
+    }
+    @Operation(summary = "Filter products")
+    @GetMapping("/filter")
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> filterProducts(
+
+            @RequestParam(required = false) String keyword,
+
+            @RequestParam(required = false) String category,
+
+            @RequestParam(required = false) String brand,
+
+            @RequestParam(required = false) BigDecimal minPrice,
+
+            @RequestParam(required = false) BigDecimal maxPrice,
+
+            @RequestParam(defaultValue = "0") int page,
+
+            @RequestParam(defaultValue = "10") int size,
+
+            @RequestParam(defaultValue = "id") String sortBy,
+
+            @RequestParam(defaultValue = "asc") String direction) {
+
+        Page<ProductResponse> response =
+                productService.filterProducts(
+                        keyword,
+                        category,
+                        brand,
+                        minPrice,
+                        maxPrice,
+                        page,
+                        size,
+                        sortBy,
+                        direction
+                );
+
+        return ResponseEntity.ok(
+                ApiResponse.<Page<ProductResponse>>builder()
+                        .success(true)
+                        .message("Products fetched successfully")
+                        .data(response)
+                        .timestamp(LocalDateTime.now())
+                        .build()
+        );
     }
 }
