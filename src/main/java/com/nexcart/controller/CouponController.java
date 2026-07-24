@@ -1,6 +1,8 @@
 package com.nexcart.controller;
 
+import com.nexcart.dto.request.ApplyCouponRequest;
 import com.nexcart.dto.request.CouponRequest;
+import com.nexcart.dto.response.ApplyCouponResponse;
 import com.nexcart.dto.response.CouponResponse;
 import com.nexcart.service.CouponService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,7 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/coupons")
 @RequiredArgsConstructor
-@Tag(name = "Coupon Management", description = "APIs for managing coupons")
+@Tag(name = "Coupon Controller", description = "APIs for managing and applying coupons")
 public class CouponController {
 
     private final CouponService couponService;
@@ -26,9 +28,8 @@ public class CouponController {
     public ResponseEntity<CouponResponse> createCoupon(
             @Valid @RequestBody CouponRequest request) {
 
-        CouponResponse response = couponService.createCoupon(request);
-
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(couponService.createCoupon(request));
     }
 
     @Operation(summary = "Get coupon by ID")
@@ -64,6 +65,14 @@ public class CouponController {
         couponService.deleteCoupon(couponId);
 
         return ResponseEntity.ok("Coupon deleted successfully.");
+    }
+
+    @Operation(summary = "Apply coupon")
+    @PostMapping("/apply")
+    public ResponseEntity<ApplyCouponResponse> applyCoupon(
+            @Valid @RequestBody ApplyCouponRequest request) {
+
+        return ResponseEntity.ok(couponService.applyCoupon(request));
     }
 }
 
