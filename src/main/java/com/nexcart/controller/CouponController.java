@@ -1,0 +1,69 @@
+package com.nexcart.controller;
+
+import com.nexcart.dto.request.CouponRequest;
+import com.nexcart.dto.response.CouponResponse;
+import com.nexcart.service.CouponService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/coupons")
+@RequiredArgsConstructor
+@Tag(name = "Coupon Management", description = "APIs for managing coupons")
+public class CouponController {
+
+    private final CouponService couponService;
+
+    @Operation(summary = "Create a new coupon")
+    @PostMapping
+    public ResponseEntity<CouponResponse> createCoupon(
+            @Valid @RequestBody CouponRequest request) {
+
+        CouponResponse response = couponService.createCoupon(request);
+
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
+    }
+
+    @Operation(summary = "Get coupon by ID")
+    @GetMapping("/{couponId}")
+    public ResponseEntity<CouponResponse> getCouponById(
+            @PathVariable Long couponId) {
+
+        return ResponseEntity.ok(couponService.getCouponById(couponId));
+    }
+
+    @Operation(summary = "Get all coupons")
+    @GetMapping
+    public ResponseEntity<List<CouponResponse>> getAllCoupons() {
+
+        return ResponseEntity.ok(couponService.getAllCoupons());
+    }
+
+    @Operation(summary = "Update coupon")
+    @PutMapping("/{couponId}")
+    public ResponseEntity<CouponResponse> updateCoupon(
+            @PathVariable Long couponId,
+            @Valid @RequestBody CouponRequest request) {
+
+        return ResponseEntity.ok(
+                couponService.updateCoupon(couponId, request));
+    }
+
+    @Operation(summary = "Delete coupon")
+    @DeleteMapping("/{couponId}")
+    public ResponseEntity<String> deleteCoupon(
+            @PathVariable Long couponId) {
+
+        couponService.deleteCoupon(couponId);
+
+        return ResponseEntity.ok("Coupon deleted successfully.");
+    }
+}
+
