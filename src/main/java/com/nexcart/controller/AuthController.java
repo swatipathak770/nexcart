@@ -1,12 +1,13 @@
 package com.nexcart.controller;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
+
 import com.nexcart.dto.request.LoginRequest;
 import com.nexcart.dto.request.RegisterRequest;
 import com.nexcart.dto.response.ApiResponse;
 import com.nexcart.dto.response.LoginResponse;
 import com.nexcart.dto.response.UserResponse;
 import com.nexcart.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+
 @Tag(
         name = "Authentication",
         description = "APIs for user registration and login"
@@ -24,6 +26,7 @@ import java.time.LocalDateTime;
 public class AuthController {
 
     private final AuthService authService;
+
     @Operation(summary = "Register a new user")
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserResponse>> register(
@@ -41,6 +44,7 @@ public class AuthController {
 
         return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
     }
+
     @Operation(summary = "Authenticate user and generate JWT token")
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
@@ -58,5 +62,4 @@ public class AuthController {
 
         return ResponseEntity.ok(apiResponse);
     }
-
 }

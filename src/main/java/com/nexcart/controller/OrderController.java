@@ -15,35 +15,43 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
-@Tag(name = "Order Management", description = "APIs for managing customer orders")
-@SecurityRequirement(name = "Bearer Authentication")
+@Tag(name = "Order", description = "Order Management APIs")
+@SecurityRequirement(name = "bearerAuth")
 public class OrderController {
 
     private final OrderService orderService;
 
-    @Operation(summary = "Place a new order from the user's cart")
     @PostMapping
-    public ResponseEntity<OrderResponse> placeOrder() {
-        OrderResponse response = orderService.placeOrder();
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    @Operation(summary = "Place an Order")
+    public ResponseEntity<OrderResponse> placeOrder(
+            @RequestParam(required = false) String couponCode) {
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(orderService.placeOrder(couponCode));
     }
 
-    @Operation(summary = "Get all orders of the logged-in user")
     @GetMapping
+    @Operation(summary = "Get My Orders")
     public ResponseEntity<List<OrderResponse>> getMyOrders() {
+
         return ResponseEntity.ok(orderService.getMyOrders());
     }
 
-    @Operation(summary = "Get an order by its ID")
     @GetMapping("/{orderId}")
-    public ResponseEntity<OrderResponse> getOrderById(@PathVariable Long orderId) {
+    @Operation(summary = "Get Order By ID")
+    public ResponseEntity<OrderResponse> getOrderById(
+            @PathVariable Long orderId) {
+
         return ResponseEntity.ok(orderService.getOrderById(orderId));
     }
 
-    @Operation(summary = "Cancel an existing order")
     @PutMapping("/{orderId}/cancel")
-    public ResponseEntity<String> cancelOrder(@PathVariable Long orderId) {
+    @Operation(summary = "Cancel Order")
+    public ResponseEntity<String> cancelOrder(
+            @PathVariable Long orderId) {
+
         orderService.cancelOrder(orderId);
+
         return ResponseEntity.ok("Order cancelled successfully.");
     }
 }

@@ -18,6 +18,12 @@ public class OrderResponse {
 
     private BigDecimal totalAmount;
 
+    private BigDecimal discountAmount;
+
+    private BigDecimal finalAmount;
+
+    private String couponCode;
+
     private OrderStatus status;
 
     private LocalDateTime createdAt;

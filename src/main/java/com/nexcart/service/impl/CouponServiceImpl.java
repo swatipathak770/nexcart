@@ -32,7 +32,7 @@ public class CouponServiceImpl implements CouponService {
     @Transactional
     public CouponResponse createCoupon(CouponRequest request) {
 
-        if (couponRepository.existsByCode(request.getCode())) {
+        if (couponRepository.existsByCodeIgnoreCase(request.getCode())) {
             throw new CouponAlreadyExistsException(
                     "Coupon with code '" + request.getCode() + "' already exists.");
         }
@@ -79,8 +79,8 @@ public class CouponServiceImpl implements CouponService {
                         new CouponNotFoundException(
                                 "Coupon not found with ID: " + couponId));
 
-        if (!coupon.getCode().equals(request.getCode())
-                && couponRepository.existsByCode(request.getCode())) {
+        if (!coupon.getCode().equalsIgnoreCase(request.getCode())
+                && couponRepository.existsByCodeIgnoreCase(request.getCode())) {
 
             throw new CouponAlreadyExistsException(
                     "Coupon with code '" + request.getCode() + "' already exists.");
@@ -114,25 +114,12 @@ public class CouponServiceImpl implements CouponService {
     @Transactional(readOnly = true)
     public ApplyCouponResponse applyCoupon(ApplyCouponRequest request) {
 
-        Coupon coupon = couponRepository.findByCodeIgnoreCase(request.getCouponCode())
-                .orElseThrow(() ->
-                        new CouponNotFoundException(
-                                "Coupon not found with code: " + request.getCouponCode()));
-
-        if (!coupon.getActive()) {
-            throw new InvalidCouponException("Coupon is inactive.");
-        }
-
-        if (coupon.getExpiryDate().isBefore(LocalDateTime.now())) {
-            throw new InvalidCouponException("Coupon has expired.");
-        }
-
         BigDecimal orderAmount = request.getOrderAmount();
 
-        if (orderAmount.compareTo(coupon.getMinimumOrderAmount()) < 0) {
-            throw new InvalidCouponException(
-                    "Minimum order amount should be ₹" + coupon.getMinimumOrderAmount());
-        }
+        Coupon coupon = validateCoupon(
+                request.getCouponCode(),
+                orderAmount
+        );
 
         BigDecimal discount;
 
@@ -166,5 +153,30 @@ public class CouponServiceImpl implements CouponService {
                 .finalAmount(finalAmount)
                 .message("Coupon applied successfully.")
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Coupon validateCoupon(String couponCode, BigDecimal orderAmount) {
+
+        Coupon coupon = couponRepository.findByCodeIgnoreCase(couponCode)
+                .orElseThrow(() ->
+                        new CouponNotFoundException(
+                                "Coupon not found with code: " + couponCode));
+
+        if (!coupon.getActive()) {
+            throw new InvalidCouponException("Coupon is inactive.");
+        }
+
+        if (coupon.getExpiryDate().isBefore(LocalDateTime.now())) {
+            throw new InvalidCouponException("Coupon has expired.");
+        }
+
+        if (orderAmount.compareTo(coupon.getMinimumOrderAmount()) < 0) {
+            throw new InvalidCouponException(
+                    "Minimum order amount should be ₹" + coupon.getMinimumOrderAmount());
+        }
+
+        return coupon;
     }
 }

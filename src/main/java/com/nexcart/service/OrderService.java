@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface OrderService {
 
-    OrderResponse placeOrder();
+    OrderResponse placeOrder(String couponCode);
 
     List<OrderResponse> getMyOrders();
 

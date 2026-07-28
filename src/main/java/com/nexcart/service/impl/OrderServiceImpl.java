@@ -4,7 +4,11 @@ import com.nexcart.dto.response.OrderResponse;
 import com.nexcart.entity.*;
 import com.nexcart.exception.ResourceNotFoundException;
 import com.nexcart.mapper.OrderMapper;
-import com.nexcart.repository.*;
+import com.nexcart.repository.CartRepository;
+import com.nexcart.repository.OrderRepository;
+import com.nexcart.repository.ProductRepository;
+import com.nexcart.repository.UserRepository;
+import com.nexcart.service.CouponService;
 import com.nexcart.service.OrderService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +16,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 @Service
@@ -19,11 +24,11 @@ import java.util.List;
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
-    private final OrderItemRepository orderItemRepository;
     private final CartRepository cartRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final OrderMapper orderMapper;
+    private final CouponService couponService;
 
     private User getCurrentUser() {
 
@@ -38,7 +43,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse placeOrder() {
+    public OrderResponse placeOrder(String couponCode) {
 
         User user = getCurrentUser();
 
@@ -48,14 +53,9 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Cart is empty.");
         }
 
-        Order order = Order.builder()
-                .user(user)
-                .status(OrderStatus.PENDING)
-                .totalAmount(BigDecimal.ZERO)
-                .build();
-
         BigDecimal total = BigDecimal.ZERO;
 
+        // Calculate total amount
         for (Cart cart : cartItems) {
 
             Product product = cart.getProduct();
@@ -63,6 +63,57 @@ public class OrderServiceImpl implements OrderService {
             if (product.getStock() < cart.getQuantity()) {
                 throw new RuntimeException(product.getName() + " is out of stock.");
             }
+
+            total = total.add(
+                    product.getPrice()
+                            .multiply(BigDecimal.valueOf(cart.getQuantity()))
+            );
+        }
+
+        BigDecimal discount = BigDecimal.ZERO;
+        Coupon appliedCoupon = null;
+
+        if (couponCode != null && !couponCode.isBlank()) {
+
+            appliedCoupon = couponService.validateCoupon(couponCode, total);
+
+            if (appliedCoupon.getDiscountType() == DiscountType.PERCENTAGE) {
+
+                discount = total
+                        .multiply(appliedCoupon.getDiscountValue())
+                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+                if (appliedCoupon.getMaximumDiscount() != null
+                        && discount.compareTo(appliedCoupon.getMaximumDiscount()) > 0) {
+
+                    discount = appliedCoupon.getMaximumDiscount();
+                }
+
+            } else {
+
+                discount = appliedCoupon.getDiscountValue();
+            }
+        }
+
+        BigDecimal finalAmount = total.subtract(discount);
+
+        if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            finalAmount = BigDecimal.ZERO;
+        }
+
+        Order order = Order.builder()
+                .user(user)
+                .status(OrderStatus.PENDING)
+                .totalAmount(total)
+                .discountAmount(discount)
+                .finalAmount(finalAmount)
+                .coupon(appliedCoupon)
+                .build();
+
+        // Create order items and reduce stock
+        for (Cart cart : cartItems) {
+
+            Product product = cart.getProduct();
 
             product.setStock(product.getStock() - cart.getQuantity());
             productRepository.save(product);
@@ -75,14 +126,7 @@ public class OrderServiceImpl implements OrderService {
                     .build();
 
             order.getOrderItems().add(orderItem);
-
-            total = total.add(
-                    product.getPrice()
-                            .multiply(BigDecimal.valueOf(cart.getQuantity()))
-            );
         }
-
-        order.setTotalAmount(total);
 
         Order savedOrder = orderRepository.save(order);
 
@@ -136,7 +180,6 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Order is already cancelled.");
         }
 
-        // Restore stock
         for (OrderItem item : order.getOrderItems()) {
 
             Product product = item.getProduct();

@@ -23,6 +23,18 @@ public class Order extends BaseEntity {
     @Column(nullable = false)
     private BigDecimal totalAmount;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private BigDecimal finalAmount = BigDecimal.ZERO;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "coupon_id")
+    private Coupon coupon;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderStatus status;
@@ -34,4 +46,8 @@ public class Order extends BaseEntity {
     )
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
+    @OneToOne(mappedBy = "order",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    private Payment payment;
 }

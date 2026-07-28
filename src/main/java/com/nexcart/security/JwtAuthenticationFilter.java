@@ -1,6 +1,5 @@
 package com.nexcart.security;
 
-import com.nexcart.security.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,7 +18,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final com.nexcart.security.JwtService jwtService;
+    private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
 
     @Override
@@ -28,43 +27,41 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
+        System.out.println("JwtAuthenticationFilter Executed");
+
         final String authHeader = request.getHeader("Authorization");
 
-        // No Authorization header
+        System.out.println("Authorization Header = " + authHeader);
+
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            System.out.println("No Bearer Token");
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Remove "Bearer "
         String jwt = authHeader.substring(7);
 
-        // Extract email
+        System.out.println("JWT = " + jwt);
+
         String username = jwtService.extractUsername(jwt);
 
-        // Authenticate only if not already authenticated
-        if (username != null &&
-                SecurityContextHolder.getContext().getAuthentication() == null) {
+        System.out.println("Username = " + username);
 
-            UserDetails userDetails =
-                    userDetailsService.loadUserByUsername(username);
+        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-            if (jwtService.isTokenValid(jwt, userDetails)) {
+        if (jwtService.isTokenValid(jwt, userDetails)) {
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities());
+            System.out.println("Token Valid");
 
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request));
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities());
 
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authentication);
-            }
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            System.out.println("Authentication Set");
         }
 
         filterChain.doFilter(request, response);

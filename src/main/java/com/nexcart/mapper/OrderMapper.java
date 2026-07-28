@@ -22,6 +22,11 @@ public class OrderMapper {
         return OrderResponse.builder()
                 .orderId(order.getId())
                 .totalAmount(order.getTotalAmount())
+                .discountAmount(order.getDiscountAmount())
+                .finalAmount(order.getFinalAmount())
+                .couponCode(order.getCoupon() != null
+                        ? order.getCoupon().getCode()
+                        : null)
                 .status(order.getStatus())
                 .createdAt(order.getCreatedAt())
                 .items(items)
