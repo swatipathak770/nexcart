@@ -40,11 +40,20 @@ public class CartController {
                 cartService.updateQuantity(cartId, quantity)
         );
     }
+
     @DeleteMapping
     public ResponseEntity<String> clearCart() {
 
         cartService.clearCart();
 
         return ResponseEntity.ok("Cart cleared successfully.");
+    }
+    @DeleteMapping("/{cartId}")
+    public ResponseEntity<String> removeCartItem(
+            @PathVariable Long cartId) {
+
+        cartService.removeCartItem(cartId);
+
+        return ResponseEntity.ok("Item removed from cart successfully.");
     }
 }

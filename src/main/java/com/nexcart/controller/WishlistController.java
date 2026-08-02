@@ -16,7 +16,7 @@ import java.util.List;
 @RequestMapping("/api/wishlist")
 @RequiredArgsConstructor
 @Tag(name = "Wishlist Management", description = "APIs for managing user wishlist")
-@SecurityRequirement(name = "Bearer Authentication")
+@SecurityRequirement(name = "bearerAuth")
 public class WishlistController {
 
     private final WishlistService wishlistService;

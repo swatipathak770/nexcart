@@ -11,24 +11,19 @@ import com.nexcart.repository.BrandRepository;
 import com.nexcart.repository.CategoryRepository;
 import com.nexcart.repository.ProductRepository;
 import com.nexcart.service.ProductService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import com.nexcart.specification.ProductSpecification;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-
-
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
@@ -50,10 +45,15 @@ public class ProductServiceImpl implements ProductService {
 
         Product savedProduct = productRepository.save(product);
 
+        savedProduct = productRepository.findById(savedProduct.getId())
+                .orElseThrow(() ->
+                        new ProductNotFoundException("Product not found."));
+
         return productMapper.toResponse(savedProduct);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<ProductResponse> getAllProducts(
             int page,
             int size,
@@ -69,7 +69,9 @@ public class ProductServiceImpl implements ProductService {
         return productRepository.findAll(pageable)
                 .map(productMapper::toResponse);
     }
+
     @Override
+    @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id) {
 
         Product product = getProduct(id);
@@ -101,6 +103,10 @@ public class ProductServiceImpl implements ProductService {
 
         Product updatedProduct = productRepository.save(product);
 
+        updatedProduct = productRepository.findById(updatedProduct.getId())
+                .orElseThrow(() ->
+                        new ProductNotFoundException("Product not found."));
+
         return productMapper.toResponse(updatedProduct);
     }
 
@@ -112,28 +118,11 @@ public class ProductServiceImpl implements ProductService {
         productRepository.delete(product);
     }
 
-    private Product getProduct(Long id) {
-        return productRepository.findById(id)
-                .orElseThrow(() ->
-                        new ProductNotFoundException("Product not found."));
-    }
-
-    private Category getCategory(Long id) {
-        return categoryRepository.findById(id)
-                .orElseThrow(() ->
-                        new CategoryNotFoundException("Category not found."));
-    }
-
-    private Brand getBrand(Long id) {
-        return brandRepository.findById(id)
-                .orElseThrow(() ->
-                        new BrandNotFoundException("Brand not found."));
-    }
     @Override
+    @Transactional(readOnly = true)
     public List<ProductResponse> searchProducts(String keyword) {
 
-        return productRepository
-                .findByNameContainingIgnoreCase(keyword)
+        return productRepository.findByNameContainingIgnoreCase(keyword)
                 .stream()
                 .map(productMapper::toResponse)
                 .toList();
@@ -167,5 +156,23 @@ public class ProductServiceImpl implements ProductService {
 
         return productRepository.findAll(specification, pageable)
                 .map(productMapper::toResponse);
+    }
+
+    private Product getProduct(Long id) {
+        return productRepository.findById(id)
+                .orElseThrow(() ->
+                        new ProductNotFoundException("Product not found."));
+    }
+
+    private Category getCategory(Long id) {
+        return categoryRepository.findById(id)
+                .orElseThrow(() ->
+                        new CategoryNotFoundException("Category not found."));
+    }
+
+    private Brand getBrand(Long id) {
+        return brandRepository.findById(id)
+                .orElseThrow(() ->
+                        new BrandNotFoundException("Brand not found."));
     }
 }

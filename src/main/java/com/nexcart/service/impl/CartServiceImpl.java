@@ -110,7 +110,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     @Transactional
-    public void removeFromCart(Long cartId) {
+    public void removeCartItem(Long cartId) {
 
         User user = getCurrentUser();
 
@@ -133,4 +133,6 @@ public class CartServiceImpl implements CartService {
 
         cartRepository.deleteByUser(user);
     }
+
+
 }
