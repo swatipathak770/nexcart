@@ -67,7 +67,7 @@ public class SecurityConfig {
                                 "/api/user/change-password",
                                 "/api/cart/**",
                                 "/api/wishlist/**",
-                                "/api/address/**",
+                                "/api/addresses/**",   // ✅ Fixed
                                 "/api/orders/**",
                                 "/api/payments/**",
                                 "/api/reviews/**"

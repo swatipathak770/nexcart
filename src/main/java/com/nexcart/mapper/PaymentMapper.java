@@ -3,9 +3,10 @@ package com.nexcart.mapper;
 import com.nexcart.dto.response.PaymentResponse;
 import com.nexcart.entity.Payment;
 
-public class PaymentMapper {
+public final class PaymentMapper {
 
     private PaymentMapper() {
+
     }
 
     public static PaymentResponse toResponse(Payment payment) {

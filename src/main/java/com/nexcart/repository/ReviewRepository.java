@@ -24,8 +24,14 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     })
     Optional<Review> findById(Long id);
 
+    @Override
+    @EntityGraph(attributePaths = {
+            "user",
+            "product"
+    })
+    List<Review> findAll();
+
     Optional<Review> findByUserAndProduct(User user, Product product);
 
     boolean existsByUserAndProduct(User user, Product product);
-
 }

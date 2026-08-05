@@ -18,7 +18,7 @@ import java.util.List;
 @RequestMapping("/api/addresses")
 @RequiredArgsConstructor
 @Tag(name = "Address Management", description = "APIs for managing user addresses")
-@SecurityRequirement(name = "Bearer Authentication")
+@SecurityRequirement(name = "bearerAuth")
 public class AddressController {
 
     private final AddressService addressService;
