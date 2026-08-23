@@ -1,0 +1,33 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
+import { getAddresses } from "../../api/addressApi";
+import { getCart } from "../../api/cartApi";
+import { applyCoupon } from "../../api/couponApi";
+import { placeOrder } from "../../api/orderApi";
+import { cancelPayment, createPaymentOrder, getPaymentConfig, markPaymentFailed, verifyPayment } from "../../api/paymentApi";
+import StoreHeader from "../../components/StoreHeader";
+
+const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+const loadRazorpay = () => new Promise((resolve) => {
+  if (window.Razorpay) { resolve(true); return; }
+  const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = () => resolve(true); script.onerror = () => resolve(false); document.body.appendChild(script);
+});
+
+export default function Checkout() {
+  const navigate = useNavigate(); const [items, setItems] = useState([]); const [addresses, setAddresses] = useState([]); const [selectedAddress, setSelectedAddress] = useState(null); const [coupon, setCoupon] = useState(""); const [discount, setDiscount] = useState(null); const [placing, setPlacing] = useState(false);
+  const total = useMemo(() => items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0), [items]); const final = discount?.finalAmount ?? total;
+  useEffect(() => { Promise.all([getCart(), getAddresses()]).then(([cart, saved]) => { setItems(cart); setAddresses(saved); setSelectedAddress(saved.find((address) => address.isDefault)?.id ?? saved[0]?.id ?? null); }).catch(() => toast.error("Unable to prepare checkout.")); }, []);
+  const pay = async () => {
+    if (!await loadRazorpay()) { toast.error("Unable to load Razorpay checkout."); return; }
+    setPlacing(true);
+    try {
+      const order = await placeOrder(discount?.couponCode);
+      const [payment, config] = await Promise.all([createPaymentOrder(order.orderId), getPaymentConfig()]);
+      let paymentCompleted = false;
+      const razorpay = new window.Razorpay({ key: config.keyId, amount: Math.round(Number(payment.amount) * 100), currency: "INR", name: "NexCart", description: `Order #${order.orderId}`, order_id: payment.razorpayOrderId, method: { upi: true, card: true, netbanking: true, wallet: true }, handler: async (response) => { paymentCompleted = true; try { await verifyPayment({ orderId: order.orderId, razorpayPaymentId: response.razorpay_payment_id, razorpaySignature: response.razorpay_signature }); toast.success("Payment successful. Your order is confirmed."); navigate(`/orders/${order.orderId}`); } catch (error) { toast.error(error.response?.data?.message || "Payment could not be verified."); navigate(`/orders/${order.orderId}`); } finally { setPlacing(false); } }, modal: { ondismiss: async () => { if (!paymentCompleted) { try { await cancelPayment(order.orderId, "Razorpay Checkout was closed by the customer."); } catch { /* The order can still be viewed even if this notification cannot be sent. */ } } setPlacing(false); if (!paymentCompleted) toast("Payment cancelled. Your order is awaiting a new payment attempt."); } }, theme: { color: "#059669" } });
+      razorpay.on("payment.failed", async (event) => { try { await markPaymentFailed(order.orderId, event.error?.description || "Razorpay Checkout reported a failed payment."); } catch { /* Preserve the Razorpay failure message for the customer. */ } setPlacing(false); toast.error("Payment failed. Please try again from your order."); }); razorpay.open();
+    } catch (error) { setPlacing(false); toast.error(error.response?.data?.message || "Unable to start payment."); }
+  };
+  return <><StoreHeader /><main className="mx-auto min-h-screen max-w-5xl px-5 py-10 sm:px-8"><h1 className="text-4xl font-black">Checkout</h1><div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]"><section className="rounded-2xl border bg-white p-6"><h2 className="text-xl font-black">Delivery address</h2>{addresses.length ? <div className="mt-4 space-y-3">{addresses.map((address) => <button type="button" key={address.id} onClick={() => setSelectedAddress(address.id)} className={`w-full rounded-xl border p-4 text-left ${selectedAddress === address.id ? "border-emerald-500 bg-emerald-50" : "border-slate-200"}`}><p className="font-bold">{address.fullName}{address.isDefault ? " · Default" : ""}</p><p className="mt-1 text-sm text-slate-600">{address.addressLine1}, {address.city}, {address.state} — {address.postalCode}</p></button>)}</div> : <p className="mt-4 text-sm text-red-600">Add a delivery address before placing an order.</p>}<h2 className="mt-8 text-xl font-black">Items</h2>{items.map((item) => <div key={item.cartId} className="mt-3 flex justify-between text-sm"><span>{item.productName} × {item.quantity}</span><span className="font-bold">{money.format(item.subtotal)}</span></div>)}</section><aside className="h-fit rounded-2xl border bg-white p-6"><h2 className="font-black">Order summary</h2><div className="mt-5 flex gap-2"><input value={coupon} onChange={(event) => { setCoupon(event.target.value); setDiscount(null); }} placeholder="Coupon code (optional)" className="min-w-0 flex-1 rounded-xl border px-3 py-2" /><button onClick={async () => { if (!coupon.trim()) { setDiscount(null); return; } try { setDiscount(await applyCoupon(coupon.trim(), total)); toast.success("Coupon applied."); } catch (error) { toast.error(error.response?.data?.message || "Coupon cannot be applied."); } }} className="rounded-xl border px-3 text-sm font-bold">Apply</button></div>{discount && <button onClick={() => { setCoupon(""); setDiscount(null); }} className="mt-2 text-xs font-bold text-slate-500">Remove coupon</button>}<div className="mt-5 space-y-2 text-sm"><div className="flex justify-between"><span>Subtotal</span><span>{money.format(total)}</span></div>{discount && <div className="flex justify-between text-emerald-600"><span>Discount</span><span>−{money.format(discount.discount)}</span></div>}<div className="flex justify-between border-t pt-3 text-lg font-black"><span>Total</span><span>{money.format(final)}</span></div></div><button disabled={!items.length || !selectedAddress || placing} onClick={pay} className="mt-6 w-full rounded-xl bg-emerald-600 py-3 font-bold text-white disabled:bg-slate-300">{placing ? "Opening payment…" : "Pay securely with Razorpay"}</button><p className="mt-3 text-xs text-slate-500">Razorpay Test Mode will offer the payment methods available for this account and order, including UPI whenever eligible.</p></aside></div></main></>;
+}
