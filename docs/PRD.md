@@ -1,752 +1,118 @@
-# NexCart - Product Requirements Document (PRD)
+# NexCart — Product Requirements Document
 
-Version: 2.0
+## 1. Product Overview
 
-Author: Swati Pathak
+NexCart is a full-stack electronics e-commerce application. Customers can browse products, manage shopping data, place orders, and complete Razorpay test-mode payments. Administrators manage catalog and operational data through a protected workspace.
 
-Project Type:
-Enterprise Full Stack E-Commerce Platform
+The application also includes RecoverAI, a bounded payment-recovery workflow for failed payments. It records recovery decisions, actions, outcomes, and audit events while preventing duplicate or unsafe recovery actions.
 
-Last Updated:
-July 2026
+This document describes only features implemented in the repository.
 
----
+## 2. Users and Roles
 
-# 1. Executive Summary
+| Role | Capabilities |
+| --- | --- |
+| Visitor | Browse products, categories, and brands; register or log in. |
+| Customer | Manage profile, addresses, cart, wishlist, orders, payments, coupons, and reviews. |
+| Administrator | Manage platform data and inspect/run RecoverAI workflows. |
 
-NexCart is a production-grade electronic e-commerce platform designed to demonstrate enterprise-level Full Stack Java development.
+## 3. Functional Requirements
 
-The application enables customers to browse electronic products, securely authenticate using JWT, manage carts and wishlists, place orders, make online payments, track deliveries, and review products.
+### Authentication and authorization
 
-Administrators can manage products, categories, inventory, users, orders, analytics, and business reports through a dedicated admin dashboard.
+- Users can register and log in.
+- The backend issues JWT-based authentication for protected requests.
+- Passwords are encrypted using BCrypt.
+- Customer APIs require the `CUSTOMER` role.
+- Administrative APIs under `/api/admin/**` require the `ADMIN` role.
 
-Unlike typical student CRUD projects, NexCart focuses on production-ready architecture, security, scalability, clean code principles, and modern software engineering practices.
+### Catalog
 
-The project serves as both a portfolio application and a learning platform for enterprise backend development using Spring Boot and React.
+- Customers can view products, brands, and categories.
+- Administrators can create, update, and delete products, brands, and categories.
+- Product pages display product information and reviews.
 
-# 2. Product Vision
+### Shopping
 
-To build a scalable, secure, AI-powered e-commerce platform that follows industry-standard software engineering practices and demonstrates the complete lifecycle of modern web application development.
+- Customers can add, update, and remove cart items.
+- Customers can add and remove wishlist items.
+- Customers can maintain delivery addresses.
+- Customers can apply coupons during ordering.
 
-The project aims to bridge the gap between academic projects and real-world enterprise software.
+### Orders and payments
 
-NexCart will showcase:
+- Customers can place an order from their cart.
+- NexCart creates Razorpay test-mode payment orders for checkout.
+- The backend verifies payment completion before confirming an order.
+- Customers can view their orders and order details.
+- Customers can cancel eligible orders.
+- Razorpay webhook requests are signature-verified before processing payment events.
 
-- Secure Authentication
-- Clean Architecture
-- Production-ready APIs
-- AI-powered Product Search
-- Cloud Image Storage
-- Payment Gateway Integration
-- Docker Deployment
-- Redis Caching
-- CI/CD Pipeline
+### Administration
 
-# 3. Problem Statement
+- Administrators can access the admin workspace.
+- The workspace supports management of products, categories, brands, users, addresses, coupons, reviews, payments, and orders.
+- Administrators can inspect recovery metrics and recovery-case detail.
 
-Most academic e-commerce projects demonstrate only CRUD operations and lack enterprise software architecture.
+### RecoverAI
 
-Common limitations include:
+- A payment failure creates a persistent recovery case.
+- A deterministic fallback decision service selects `RETRY_PAYMENT`, `CREATE_PAYMENT_LINK`, `SEND_RECOVERY_MESSAGE`, or `NO_ACTION`.
+- The service records decision source, reason, confidence, risk level, probability, expected recovery amount, actions, and audit events.
+- The backend blocks recovery actions for terminal cases: `RECOVERED`, `CUSTOMER_CANCELLED`, `EXHAUSTED`, `FAILED`, and `NO_ACTION`.
+- Equivalent completed or pending retry/payment-link actions are skipped to prevent duplicates.
+- Customer cancellation stops recovery and attempts to cancel an existing Razorpay payment link.
+- REAL recovery cases use Razorpay test-mode payment links and resolve through signed webhook events.
+- SIMULATED cases use isolated demo links and outcomes; they never call Razorpay and do not contribute to real recovered revenue.
 
-- No Authentication
-- No Authorization
-- No Security
-- No Scalability
-- No Caching
-- No AI Features
-- Poor Project Structure
-- Lack of Documentation
+## 4. Primary User Flows
 
-NexCart addresses these limitations by implementing a production-grade architecture that reflects real-world software engineering practices.
+### Customer purchase
 
-# 4. Objectives
+```text
+Browse products → Add to cart → Place order → Razorpay checkout
+→ Verify payment → Order confirmed → View order history
+```
 
-Primary Objectives
+### Failed-payment recovery
 
-- Build a production-ready Full Stack Java application.
-- Demonstrate Spring Boot best practices.
-- Implement secure JWT Authentication.
-- Design a normalized relational database.
-- Integrate Redis for caching.
-- Build AI-powered Natural Language Search.
-- Integrate Razorpay Payment Gateway.
-- Deploy using Docker.
-- Follow Clean Architecture.
-- Write production-quality documentation.
+```text
+Payment failure → Recovery case → Decision → Guardrail
+→ Bounded action → Payment outcome → Recovered or terminal state
+```
 
-Secondary Objectives
+### Admin operations
 
-- Improve software engineering skills.
-- Prepare for product-based company interviews.
-- Demonstrate backend system design knowledge.
-- Showcase enterprise development practices.
+```text
+Admin login → Admin workspace → Manage platform data
+or inspect RecoverAI cases, actions, and audit trail
+```
 
-# 5. User Personas
+## 5. Non-Functional Requirements
 
-NexCart has two primary user roles.
+- REST APIs are implemented with Spring Boot.
+- Data is persisted in MySQL through Spring Data JPA and Hibernate.
+- Protected API access is enforced by Spring Security and JWT authentication.
+- Frontend routes use protected and admin-only route guards.
+- The system provides OpenAPI/Swagger documentation.
+- Recovery operations are transactional and auditable.
 
----
+## 6. System Boundaries
 
-## 5.1 Customer
+NexCart currently integrates with:
 
-### Description
+- **MySQL** for application and recovery data.
+- **Razorpay Test Mode** for payment checkout, payment links, and webhooks.
 
-A customer visits the platform to browse electronic products, compare options, purchase products, and manage orders.
+RecoverAI does not independently change order values, payment amounts, user permissions, or product inventory. Its available actions are restricted and verified in the backend.
 
-### Goals
+## 7. Success Criteria
 
-- Create an account
-- Login securely
-- Search products
-- Compare products
-- Add products to cart
-- Add products to wishlist
-- Place orders
-- Track orders
-- Review purchased products
+The current implementation is considered operational when:
 
-### Pain Points
-
-- Difficult product discovery
-- Slow websites
-- Complicated checkout
-- Poor search experience
-
----
-
-## 5.2 Administrator
-
-### Description
-
-An administrator manages the complete e-commerce platform.
-
-### Responsibilities
-
-- Add products
-- Update products
-- Delete products
-- Manage inventory
-- Manage brands
-- Manage categories
-- Manage users
-- Process orders
-- View reports
-- View analytics
-
-### Goals
-
-- Efficient inventory management
-- Faster order processing
-- Better customer experience
-- Business growth
-
-# 6. User Journey
-
-## Customer Journey
-
-Visitor
-
-↓
-
-Home Page
-
-↓
-
-Browse Products
-
-↓
-
-Search Product
-
-↓
-
-View Product Details
-
-↓
-
-Register/Login
-
-↓
-
-Add to Cart
-
-↓
-
-Checkout
-
-↓
-
-Payment
-
-↓
-
-Order Confirmation
-
-↓
-
-Track Order
-
-↓
-
-Review Product
-
----
-
-## Administrator Journey
-
-Admin Login
-
-↓
-
-Dashboard
-
-↓
-
-Manage Products
-
-↓
-
-Manage Inventory
-
-↓
-
-Manage Orders
-
-↓
-
-View Reports
-
-↓
-
-Business Analytics
-
-# 7. User Stories
-
-## Authentication
-
-As a customer,
-
-I want to register using my email,
-
-So that I can access the platform securely.
-
----
-
-As a customer,
-
-I want to login,
-
-So that I can place orders.
-
----
-
-As a customer,
-
-I want to reset my password,
-
-So that I can recover my account.
-
----
-
-## Product
-
-As a customer,
-
-I want to search products,
-
-So that I can quickly find what I need.
-
----
-
-As a customer,
-
-I want to filter products,
-
-So that I can compare products easily.
-
----
-
-As a customer,
-
-I want to view ratings and reviews,
-
-So that I can make better purchase decisions.
-
----
-
-## Cart
-
-As a customer,
-
-I want to add products to my cart,
-
-So that I can purchase multiple items together.
-
----
-
-## Wishlist
-
-As a customer,
-
-I want to save products,
-
-So that I can purchase them later.
-
----
-
-## Orders
-
-As a customer,
-
-I want to track my order,
-
-So that I know its delivery status.
-
----
-
-## Admin
-
-As an administrator,
-
-I want to manage products,
-
-So that inventory remains updated.
-
----
-
-As an administrator,
-
-I want to manage orders,
-
-So that deliveries happen efficiently.
-
-# 8. Functional Requirements
-
-## Authentication
-
-- User Registration
-- Login
-- Logout
-- JWT Authentication
-- Refresh Token
-- Forgot Password
-- Reset Password
-- Email Verification
-
----
-
-## Product
-
-- Add Product
-- Update Product
-- Delete Product
-- Product Details
-- Product Images
-- Product Variants
-- Product Reviews
-- Product Ratings
-
----
-
-## Search
-
-- Keyword Search
-- AI Search
-- Brand Filter
-- Category Filter
-- Price Filter
-- Rating Filter
-- Sorting
-- Pagination
-
----
-
-## Cart
-
-- Add to Cart
-- Remove from Cart
-- Update Quantity
-
----
-
-## Wishlist
-
-- Add Wishlist
-- Remove Wishlist
-
----
-
-## Orders
-
-- Checkout
-- Payment
-- Order History
-- Track Orders
-- Invoice
-
----
-
-## Admin
-
-- Dashboard
-- Inventory
-- User Management
-- Analytics
-
-# 9. Advanced Product Filters
-
-NexCart will provide advanced filtering options based on the product category to improve the shopping experience.
-
-## Common Filters
-
-- Brand
-- Category
-- Price
-- Discount
-- Customer Rating
-- Availability
-- Delivery Time
-- Offers
-- EMI Available
-- Warranty
-- Return Policy
-
----
-
-## Laptop Filters
-
-- Processor
-- RAM
-- Storage Type (SSD/HDD)
-- Storage Capacity
-- Graphics Card
-- Screen Size
-- Screen Resolution
-- Refresh Rate
-- Operating System
-- Battery Backup
-- Weight
-- Color
-
----
-
-## Mobile Filters
-
-- RAM
-- Internal Storage
-- Processor
-- Battery Capacity
-- Camera Resolution
-- Display Size
-- Display Type
-- Refresh Rate
-- Fast Charging
-- Network (5G/4G)
-- Fingerprint Sensor
-- NFC Support
-
----
-
-## Television Filters
-
-- Screen Size
-- Display Technology
-- Resolution
-- Smart TV
-- Refresh Rate
-- HDR Support
-- HDMI Ports
-- USB Ports
-- Voice Assistant Support
-
----
-
-## Headphones
-
-- Type (Wireless/Wired)
-- Noise Cancellation
-- Battery Life
-- Microphone
-- Bluetooth Version
-- Water Resistance
-
----
-
-## Smart Watches
-
-- Display Type
-- Battery Life
-- Calling Support
-- GPS
-- Heart Rate Monitor
-- SpO2 Monitor
-- Water Resistance
-
-# 10. AI Features
-
-Unlike traditional e-commerce websites, NexCart integrates Artificial Intelligence to improve the shopping experience.
-
-## AI Natural Language Search
-
-Example:
-
-Gaming laptop under ₹70000 with RTX graphics and 16GB RAM
-
-↓
-
-AI extracts
-
-Category = Laptop
-
-Budget = 70000
-
-Graphics = RTX
-
-RAM = 16GB
-
-↓
-
-Returns matching products.
-
----
-
-## AI Product Comparison
-
-Users can compare multiple products.
-
-AI highlights:
-
-- Better performance
-- Better battery
-- Better camera
-- Better value for money
-- Recommended product
-
----
-
-## AI Buying Assistant
-
-Users can ask questions like:
-
-"I am a college student. Which laptop should I buy under ₹60,000?"
-
-AI recommends suitable products based on user requirements.
-
----
-
-## AI Smart Recommendations
-
-Recommend products based on:
-
-- Browsing History
-- Purchase History
-- Wishlist
-- Frequently Bought Together
-
----
-
-## AI Review Summarizer
-
-Instead of reading 500 reviews,
-
-AI generates:
-
-Pros
-
-Cons
-
-Overall Summary
-
----
-
-## AI Specification Explainer
-
-Example:
-
-"What is OLED Display?"
-
-AI explains specifications in simple language.
-
----
-
-## AI Accessories Recommendation
-
-Example:
-
-Laptop
-
-↓
-
-AI recommends
-
-- Mouse
-- Laptop Bag
-- Keyboard
-- Cooling Pad
-
----
-
-## AI Similar Products
-
-Shows products with similar specifications within different budgets.
-
----
-
-## AI Price Drop Alert
-
-Users receive notifications when a wishlist product price decreases.
-
----
-
-## AI Fraud Detection (Future)
-
-Detect unusual login attempts and suspicious purchasing behavior.
-
-# 11. Competitive Advantage
-
-NexCart differentiates itself from traditional e-commerce platforms by focusing on AI-assisted shopping.
-
-Key advantages include:
-
-- Natural Language Product Search
-- AI Buying Assistant
-- AI Review Summaries
-- Intelligent Product Comparison
-- Smart Recommendations
-- Production-Grade Backend Architecture
-- Secure JWT Authentication
-- Redis-Based Caching
-- Dockerized Deployment
-
-# 12. MVP Scope
-
-The first release (Version 1.0) will include:
-
-Authentication
-
-- Register
-- Login
-- JWT
-- Forgot Password
-- Email Verification
-
-Products
-
-- Product Listing
-- Product Details
-- Search
-- Filters
-
-Shopping
-
-- Cart
-- Wishlist
-
-Orders
-
-- Checkout
-- Razorpay
-- Order History
-
-Admin
-
-- Product Management
-- Inventory
-- Orders
-
-Deployment
-
-- Docker
-- Swagger
-- Redis
-
-The AI modules will be introduced incrementally after the core platform is stable.
-# 13. Development Roadmap
-
-Phase 1
-
-Project Setup
-
-Authentication
-
-Documentation
-
----
-
-Phase 2
-
-Product Module
-
-Category Module
-
-Brand Module
-
-Inventory
-
----
-
-Phase 3
-
-Cart
-
-Wishlist
-
-Orders
-
-Payments
-
----
-
-Phase 4
-
-Admin Dashboard
-
-Analytics
-
-Reports
-
----
-
-Phase 5
-
-AI Features
-
-Natural Language Search
-
-Recommendations
-
-Review Summarization
-
----
-
-Phase 6
-
-Redis
-
-Docker
-
-CI/CD
-
-Deployment
-
-# 14. Success Criteria
-
-The project will be considered successful if:
-
-- Secure authentication is implemented using JWT.
-- All REST APIs follow industry standards.
-- Database follows normalization principles.
-- Backend follows Clean Architecture.
-- Frontend is responsive.
-- APIs are documented using Swagger.
-- Docker deployment is successful.
-- Redis caching improves response time.
-- AI features enhance the shopping experience.
-
-# 15. Conclusion
-
-NexCart is designed to be more than a traditional student e-commerce project.
-
-The platform demonstrates enterprise software development practices including scalable architecture, secure authentication, clean code principles, RESTful APIs, AI-powered shopping assistance, caching, containerization, and deployment.
-
-The project serves both as a production-ready portfolio application and as a practical implementation of modern Full Stack Java development.
+- Customers can complete the catalog-to-order payment journey.
+- Authentication and role-based authorization protect relevant APIs and routes.
+- Administrators can manage application data.
+- Payment failures create visible recovery cases.
+- RecoverAI guards terminal states, prevents duplicate equivalent actions, and preserves a clear audit trail.
+- Simulated recovery outcomes remain separate from real Razorpay activity and real revenue metrics.
