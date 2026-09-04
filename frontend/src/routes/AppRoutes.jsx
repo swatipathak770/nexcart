@@ -15,6 +15,8 @@ import OrderDetails from "../pages/customer/OrderDetails";
 import Checkout from "../pages/customer/Checkout";
 import Coupons from "../pages/customer/Coupons";
 import Dashboard from "../pages/admin/Dashboard";
+import Recovery from "../pages/admin/Recovery";
+import AdminWorkspace from "../pages/admin/AdminWorkspace";
 import AdminRoute from "./AdminRoute";
 import ProtectedRoute from "./ProtectedRoute";
 import NotFound from "../pages/NotFound";
@@ -46,11 +48,12 @@ function AppRoutes() {
           path="/admin"
           element={(
             <AdminRoute>
-              <Dashboard />
+              <AdminWorkspace />
             </AdminRoute>
           )}
         />
         <Route path="/admin/dashboard" element={<Navigate to="/admin" replace />} />
+        <Route path="/admin/recovery" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<NotFound />} />
 
       </Routes>

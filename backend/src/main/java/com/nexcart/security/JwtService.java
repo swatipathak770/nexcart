@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Date;
 
 @Service
@@ -19,9 +20,23 @@ public class JwtService {
     private final JwtProperties jwtProperties;
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(
-                jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8)
-        );
+        String secret = jwtProperties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT_SECRET must be configured.");
+        }
+
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            try {
+                // Keeps existing local development secrets working with JJWT's
+                // HS256 minimum key-size requirement. Production must still use
+                // a random JWT_SECRET of at least 32 characters.
+                keyBytes = MessageDigest.getInstance("SHA-256").digest(keyBytes);
+            } catch (Exception ex) {
+                throw new IllegalStateException("Unable to prepare JWT signing key.", ex);
+            }
+        }
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateToken(UserDetails userDetails) {

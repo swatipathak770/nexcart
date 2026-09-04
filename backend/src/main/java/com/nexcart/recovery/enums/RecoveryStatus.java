@@ -1,0 +1,3 @@
+package com.nexcart.recovery.enums;
+
+public enum RecoveryStatus { DETECTED, ANALYZING, ACTION_RECOMMENDED, ACTION_PENDING, RECOVERED, FAILED, EXHAUSTED, NO_ACTION, CUSTOMER_CANCELLED }

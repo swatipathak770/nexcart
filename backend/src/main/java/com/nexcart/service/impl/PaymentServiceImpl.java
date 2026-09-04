@@ -14,6 +14,7 @@ import com.nexcart.mapper.PaymentMapper;
 import com.nexcart.repository.OrderRepository;
 import com.nexcart.repository.PaymentRepository;
 import com.nexcart.service.PaymentService;
+import com.nexcart.recovery.service.RecoveryService;
 import com.razorpay.RazorpayClient;
 import com.razorpay.Utils;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final RazorpayClient razorpayClient;
+    private final RecoveryService recoveryService;
 
     @Value("${razorpay.key-secret}")
     private String razorpayKeySecret;
@@ -79,7 +81,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (!Utils.verifyPaymentSignature(verificationData, razorpayKeySecret.trim())) {
             payment.setPaymentStatus(PaymentStatus.FAILED);
             payment.setFailureReason("Razorpay signature verification failed.");
-            paymentRepository.save(payment);
+            Payment failed = paymentRepository.save(payment);
+            recoveryService.detectFailedPayment(failed);
             throw new IllegalArgumentException("Payment verification failed.");
         }
 
@@ -90,7 +93,9 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setPaidAt(LocalDateTime.now());
         order.setStatus(OrderStatus.CONFIRMED);
         orderRepository.save(order);
-        return PaymentMapper.toResponse(paymentRepository.save(payment));
+        Payment saved = paymentRepository.save(payment);
+        recoveryService.markRecovered(saved);
+        return PaymentMapper.toResponse(saved);
     }
 
     @Override
@@ -122,7 +127,8 @@ public class PaymentServiceImpl implements PaymentService {
         if (payment.getPaymentStatus() == PaymentStatus.PENDING) {
             payment.setPaymentStatus(status);
             payment.setFailureReason(request.getReason() == null || request.getReason().isBlank() ? defaultReason : request.getReason());
-            paymentRepository.save(payment);
+            Payment updated = paymentRepository.save(payment);
+            if (status == PaymentStatus.FAILED) recoveryService.detectFailedPayment(updated);
         }
         return PaymentMapper.toResponse(payment);
     }

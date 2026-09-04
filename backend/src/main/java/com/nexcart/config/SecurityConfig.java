@@ -77,6 +77,7 @@ public class SecurityConfig {
                         // =====================================
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/api/webhooks/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",

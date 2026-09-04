@@ -10,6 +10,7 @@ import com.nexcart.repository.ProductRepository;
 import com.nexcart.repository.UserRepository;
 import com.nexcart.service.CouponService;
 import com.nexcart.service.OrderService;
+import com.nexcart.recovery.service.RecoveryService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,6 +30,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final OrderMapper orderMapper;
     private final CouponService couponService;
+    private final RecoveryService recoveryService;
 
     private User getCurrentUser() {
 
@@ -146,7 +148,7 @@ public class OrderServiceImpl implements OrderService {
 
         return orderRepository.findByUser(user)
                 .stream()
-                .map(orderMapper::toResponse)
+                .map(this::withRecoveryLink)
                 .toList();
     }
 
@@ -163,7 +165,7 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("You are not authorized to view this order.");
         }
 
-        return orderMapper.toResponse(order);
+        return withRecoveryLink(order);
     }
 
     @Override
@@ -196,5 +198,14 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(OrderStatus.CANCELLED);
 
         orderRepository.save(order);
+        recoveryService.cancelForOrder(order, "Customer cancelled this order.");
+    }
+
+    private OrderResponse withRecoveryLink(Order order) {
+        recoveryService.syncRecoveryForOrder(order);
+        Order currentOrder = orderRepository.findById(order.getId()).orElse(order);
+        OrderResponse response = orderMapper.toResponse(currentOrder);
+        recoveryService.activePaymentLinkFor(currentOrder).ifPresent(response::setRecoveryPaymentLink);
+        return response;
     }
 }
