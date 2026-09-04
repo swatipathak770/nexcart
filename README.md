@@ -1,301 +1,427 @@
-# NexCart
+NexCart + RecoverAI
 
-NexCart is a full-stack electronics commerce application with a React customer/admin interface, a Spring Boot REST API, MySQL persistence, Razorpay test-mode payments, and RecoverAI: a bounded payment-recovery workflow.
+NexCart is a full-stack, role-based e-commerce platform built with
+React, Spring Boot, MySQL, JWT/Spring Security, and Razorpay Test
+Mode.
 
-> **Project status.** This README documents the application as it exists in this repository. The product requirements document includes additional roadmap ideas (for example, natural-language product search and recommendations) that are not presented here as implemented features.
+RecoverAI extends NexCart with an AI Revenue Recovery layer for
+Track 3 of the Razorpay Buildathon. It detects failed-payment revenue at
+risk, analyzes the situation, recommends a bounded recovery action,
+executes it safely, reaches the customer, observes the payment result,
+and measures recovered revenue.
 
-## What it does
+Tagline: Recover revenue before it's lost.
 
-### Customer capabilities
+Key Features
 
-- Register and sign in with JWT-based authentication.
-- Browse products, categories, and brands; view product details and reviews.
-- Manage cart, wishlist, profile, and delivery addresses.
-- Place an order, apply coupons, and complete Razorpay checkout.
-- View orders and order details.
-- Use a secure recovery payment link when an eligible payment recovery link is available.
+NexCart E-commerce
 
-### Administrator capabilities
+Customer registration/login with JWT authentication
 
-- Manage products, brands, categories, coupons, users, addresses, reviews, payments, and orders through the protected admin workspace.
-- View RecoverAI cases, decision details, guardrail results, actions, and audit history.
-- Filter recovery data by **REAL** and **SIMULATED** cases.
-- Run an isolated simulation that never contacts Razorpay or counts toward real recovered revenue.
+BCrypt password hashing and role-based access
 
-## Architecture
+Product browsing, search, filter and sort
 
-```mermaid
-flowchart LR
-    C[Customer browser] -->|React / Vite| FE[Frontend SPA]
-    A[Administrator browser] -->|React / Vite| FE
-    FE -->|Axios + JWT| API[Spring Boot REST API]
+Categories and brands
 
-    API --> SEC[Spring Security\nJWT filter + role authorization]
-    SEC --> APP[Controllers → Services → Mappers → Repositories]
-    APP --> DB[(MySQL)]
-    APP --> RP[Razorpay Test Mode]
-    RP -->|signed webhooks| WH[/api/webhooks/razorpay]
-    WH --> APP
+Cart and wishlist
 
-    APP --> RAI[RecoverAI]
-    RAI --> RC[(Recovery cases, actions, audit logs)]
-    RC --> DB
-```
+Saved addresses and customer profile
 
-### Backend layering
+Coupons
 
-```text
-HTTP request
-  └─ Controller       REST endpoint, request/response handling
-      └─ Service      business rules, ownership checks, transactions
-          └─ Mapper   entity ↔ DTO transformation (MapStruct/manual mappers)
-              └─ Repository  Spring Data JPA persistence
-                  └─ MySQL
-```
+Order management
 
-The recovery module follows the same pattern, under `com.nexcart.recovery`, with dedicated case/action/audit entities, repositories, controllers, decision service, and webhook handler.
+Razorpay Test Mode checkout
 
-## Technology stack
+Admin product/category/brand/coupon management
 
-| Area | Technologies |
-| --- | --- |
-| Frontend | React 19, Vite, React Router, Axios, Tailwind CSS, React Hot Toast, React Icons |
-| Backend | Java 21, Spring Boot 3.5, Spring Web, Spring Data JPA, Spring Security, Spring Validation |
-| Persistence | MySQL, Hibernate/JPA |
-| Security | JWT (`jjwt`), BCrypt password hashing, role-based authorization, CORS configuration |
-| Payments | Razorpay Java SDK and Razorpay signed webhooks |
-| API documentation | Springdoc OpenAPI / Swagger UI |
-| Build and test | Maven, JUnit 5, Mockito, npm, ESLint |
-| Supporting dependencies | Redis and mail starters are included for supporting/incremental capabilities |
+Responsive React UI connected to Spring Boot REST APIs
 
-## Repository layout
+RecoverAI
 
-```text
-NexCart/
-├── backend/
-│   ├── src/main/java/com/nexcart/
-│   │   ├── controller/       REST controllers
-│   │   ├── service/          business services and implementations
-│   │   ├── entity/           JPA domain entities
-│   │   ├── repository/       Spring Data repositories
-│   │   ├── dto/              request and response contracts
-│   │   ├── mapper/           entity-to-DTO mapping
-│   │   ├── security/         JWT authentication support
-│   │   ├── config/           security, Razorpay, OpenAPI configuration
-│   │   └── recovery/         RecoverAI module
-│   └── src/test/             Spring Boot and recovery tests
-├── frontend/
-│   └── src/
-│       ├── pages/            customer, auth, and admin pages
-│       ├── components/       reusable UI components
-│       ├── api/              Axios API clients
-│       ├── context/          authentication state
-│       └── routes/           public, protected, and admin routes
-└── docs/
-    ├── PRD.md                product requirements and roadmap
-    └── RECOVERAI.md          RecoverAI feature overview
-```
+Failed-payment detection and recovery cases
 
-## Core request flow
+Revenue-at-risk and recovered-revenue metrics
 
-1. The React SPA makes requests through Axios.
-2. Protected requests carry the JWT issued during authentication.
-3. `JwtAuthenticationFilter` resolves the user and Spring Security enforces public, customer, or admin access.
-4. A controller validates input and delegates to a service.
-5. The service applies business rules and uses repositories to read/write MySQL.
-6. A mapper returns a frontend-facing response DTO.
+Recovery probability, confidence, risk level and expected recovery
 
-Role boundaries include:
+Bounded actions:
 
-- Public: authentication, product/brand/category reads, Swagger, and Razorpay webhook ingress.
-- Customer: profile, cart, wishlist, address, order, payment, and review APIs.
-- Admin: `/api/admin/**` management and RecoverAI APIs.
+RETRY_PAYMENT
 
-## Checkout and payment flow
+CREATE_PAYMENT_LINK
 
-```mermaid
+SEND_RECOVERY_MESSAGE (if enabled)
+
+NO_ACTION
+
+Customer in-app notification when a recovery payment link is
+available
+
+Secure Razorpay Test Mode Payment Links for real recovery
+
+Customer-side Complete Payment Securely flow
+
+Signed Razorpay webhook processing
+
+Recovery audit trail
+
+Real vs simulated recovery separation
+
+Simulation mode for repeatable demonstrations
+
+Backend guardrails and idempotency
+
+Cancellation and terminal-state protection
+
+Architecture
+
+flowchart TD
+    U[Customer] --> FE[React / NexCart UI]
+    A[Admin] --> FE
+
+    FE --> API[Spring Boot REST API]
+    API --> SEC[Spring Security + JWT]
+    API --> DB[(MySQL)]
+
+    API --> REC[RecoverAI Engine]
+    REC --> DEC[AI Decision / Deterministic Fallback]
+    DEC --> G[Guardrails + Idempotency]
+    G --> ACT[Bounded Recovery Action]
+
+    ACT -->|Retry| CHK[NexCart Secure Checkout]
+    ACT -->|Create Payment Link| RP[Razorpay Test Mode]
+    ACT -->|Notification| N[Customer Notification]
+
+    U --> N
+    U --> CHK
+    U --> RP
+
+    RP --> WH[Signed Razorpay Webhook]
+    WH --> REC
+
+    REC --> AUD[Recovery Audit Trail]
+    REC --> MET[Recovery Metrics]
+
+    SIM[Simulation Engine] --> REC
+    SIM -.->|No real gateway transaction| MET
+
+Recovery lifecycle
+
+PAYMENT FAILED
+      ↓
+RECOVERY CASE CREATED
+      ↓
+ANALYZE
+      ↓
+DECIDE
+      ↓
+GUARDRAIL CHECK
+      ↓
+BOUNDED ACTION
+      ↓
+CUSTOMER NOTIFIED
+      ↓
+PAYMENT / RESULT OBSERVED
+      ↓
+RECOVERED / FAILED / EXHAUSTED / NO_ACTION
+      ↓
+METRICS + AUDIT TRAIL
+
+REAL Recovery Flow
+
 sequenceDiagram
     participant Customer
-    participant UI as React checkout
-    participant API as Spring Boot
+    participant NexCart
+    participant RecoverAI
     participant Razorpay
-    participant DB as MySQL
-
-    Customer->>UI: Place order
-    UI->>API: Create order
-    API->>DB: Save order and items
-    UI->>API: POST /api/payments/create-order
-    API->>Razorpay: Create payment order
-    Razorpay-->>API: Razorpay order ID
-    API-->>UI: Checkout payload
-    UI->>Razorpay: Open checkout
-    Razorpay-->>UI: Payment result
-    UI->>API: POST /api/payments/verify
-    API->>DB: Mark payment SUCCESS and order CONFIRMED
-```
-
-If checkout fails, the payment failure path creates a recovery case. Razorpay webhook events provide an additional, signed server-to-server update path.
-
-## RecoverAI
-
-RecoverAI is intentionally a **bounded decision and recovery system**, not an unrestricted agent. Its lifecycle is:
-
-```text
-Payment failure
-  → Recovery case detected
-  → Deterministic analysis and recommendation
-  → Guardrail validation
-  → One bounded action
-  → Audit events and customer recovery notification (when a real link exists)
-  → Payment or webhook outcome
-  → RECOVERED or terminal outcome
-```
-
-### Decision engine
-
-The current `DeterministicAIRecoveryService` is explicitly recorded as `DETERMINISTIC_FALLBACK`; it does not claim to be a generative-AI decision.
-
-It calculates a recovery probability and chooses one of these typed actions:
-
-- `RETRY_PAYMENT`
-- `CREATE_PAYMENT_LINK`
-- `SEND_RECOVERY_MESSAGE`
-- `NO_ACTION`
-
-The decision considers payment amount and earlier action attempts. For example, higher-value failures are directed to a secure payment link, while retry limits lead to a bounded reminder. The result includes a reason, confidence, risk level, expected recovery amount, and decision source.
-
-### Guardrails and idempotency
-
-Recovery actions are enforced by the backend, not only by the UI:
-
-- Cases in `RECOVERED`, `CUSTOMER_CANCELLED`, `EXHAUSTED`, `FAILED`, or `NO_ACTION` cannot execute another action.
-- Recovery attempts are capped by `recovery.max-attempts` (default: `3`).
-- Equivalent completed or pending retry/link actions are skipped.
-- A live real payment link prevents unnecessary duplicate Razorpay links.
-- Cancelling an order changes its recovery case to `CUSTOMER_CANCELLED` and attempts to cancel any associated Razorpay payment link.
-- Every material event is stored in the recovery audit trail.
-
-### REAL recovery flow
-
-```mermaid
-sequenceDiagram
-    participant Payment
-    participant Recovery as RecoverAI
-    participant Razorpay
-    participant Customer
     participant Webhook
 
-    Payment->>Recovery: Failed payment detected
-    Recovery->>Recovery: Analyze + apply guardrails
-    Recovery->>Razorpay: Create test-mode payment link
-    Recovery-->>Customer: Payment recovery available → Complete Payment
+    Customer->>NexCart: Checkout
+    NexCart->>Razorpay: Test payment
+    Razorpay-->>NexCart: Payment failed
+    NexCart->>RecoverAI: Create recovery case
+    RecoverAI->>RecoverAI: Analyze + decide
+    RecoverAI->>RecoverAI: Apply guardrails
+    RecoverAI->>Razorpay: Create test-mode Payment Link
+    RecoverAI-->>Customer: Recovery notification
     Customer->>Razorpay: Complete payment
-    Razorpay->>Webhook: payment_link.paid (signed)
-    Webhook->>Recovery: Resolve case
-    Recovery->>Recovery: RECOVERED + audit events
-```
+    Razorpay->>Webhook: payment_link.paid
+    Webhook->>RecoverAI: Verify signature + resolve case
+    RecoverAI->>NexCart: Update order/payment state
+    RecoverAI->>RecoverAI: RECOVERED + audit + metrics
 
-The webhook endpoint verifies `X-Razorpay-Signature` against the configured webhook secret before it accepts an event. A real recovered amount is counted only in real recovery metrics.
+A real recovered amount is counted only in REAL recovery metrics.
 
-### SIMULATED recovery flow
+SIMULATED Recovery Flow
 
-Simulations are deliberately segregated from Razorpay and real business metrics:
+Simulation is isolated from Razorpay and real financial metrics.
 
-1. The admin creates a simulated case.
-2. Executing `CREATE_PAYMENT_LINK` creates a `simulated://` demo link only.
-3. No Razorpay payment link, checkout, webhook, customer notification, order update, or payment-gateway request is created.
-4. The audit trail records `SIMULATED_ACTION_PENDING`, `SIMULATED_PAYMENT_LINK_CREATED`, `SIMULATED_PAYMENT_SUCCESSFUL`, and `SIMULATED_RECOVERY_COMPLETED` as applicable.
-5. The case resolves to `RECOVERED` as a demo outcome, but its amount is labeled **SIMULATED** and excluded from REAL recovered revenue.
+Admin creates or runs a simulated scenario.
 
-The admin UI labels simulated cases, amounts, and outcomes. In **ALL** mode, real financial metrics and simulated recovered amounts are presented separately.
+RecoverAI analyzes the synthetic case using the same decision and
+guardrail logic.
 
-### Recovery endpoints
+Executing CREATE_PAYMENT_LINK creates a simulated:// demo link
+only.
 
-All administrative recovery endpoints require the `ADMIN` role.
+No Razorpay transaction, webhook, customer payment, or real gateway
+request is created.
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/admin/recovery/metrics` | Recovery metrics; accepts `mode=ALL`, `REAL`, or `SIMULATED` |
-| `GET` | `/api/admin/recovery/cases` | List recovery cases |
-| `GET` | `/api/admin/recovery/cases/{id}` | Case detail, actions, and audit trail |
-| `POST` | `/api/admin/recovery/cases/{id}/analyze` | Run/re-run analysis for a non-terminal case |
-| `POST` | `/api/admin/recovery/cases/{id}/execute` | Execute the approved bounded action |
-| `POST` | `/api/admin/recovery/simulate` | Create an isolated demo case |
-| `POST` | `/api/webhooks/razorpay` | Receive signed Razorpay payment events |
+The simulation records events such as:
 
-## Local setup
+SIMULATED_ACTION_PENDING
 
-### Prerequisites
+SIMULATED_PAYMENT_LINK_CREATED
 
-- Java 21+
-- Maven 3.9+
-- Node.js and npm
-- MySQL 8+
-- Razorpay test-mode credentials for real payment testing
+SIMULATED_PAYMENT_SUCCESSFUL
 
-### 1. Configure the backend
+SIMULATED_RECOVERY_COMPLETED
 
-Create a MySQL database named `nexcart`, then supply local credentials and secrets as environment variables (or equivalent Spring property overrides). Do not commit real secrets.
+Simulated recovered amounts are clearly labeled and never
+contribute to REAL recovered revenue.
 
-```properties
-SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/nexcart
-SPRING_DATASOURCE_USERNAME=YOUR_DB_USER
-SPRING_DATASOURCE_PASSWORD=YOUR_DB_PASSWORD
+Dashboard modes: - REAL --- actual NexCart/Razorpay Test Mode
+recovery cases - SIMULATED --- synthetic demo cases - ALL ---
+both, with real and simulated metrics clearly separated
 
-JWT_SECRET=use_a_long_random_secret
+AI Decision and Guardrails
+
+RecoverAI considers payment context such as: - Payment amount - Failure
+reason - Earlier recovery attempts - Previous action outcomes - Recovery
+limits and order state
+
+The decision returns: - Recommended action - Recovery probability -
+Expected recovery amount - Confidence - Risk level - Decision source -
+Explanation/reason
+
+Expected recovery:
+
+Expected Recovery = Payment Amount × Recovery Probability
+
+If the AI provider is unavailable, the system uses a clearly labeled
+deterministic fallback to produce a safe bounded recommendation.
+
+Guardrails
+
+Enforced on the backend, not only in the UI:
+
+RECOVERED, CUSTOMER_CANCELLED, EXHAUSTED, FAILED, and
+NO_ACTION cases cannot execute another action.
+
+Recovery attempts are capped by RECOVERY_MAX_ATTEMPTS (default:
+3).
+
+Equivalent pending/completed retry or payment-link actions are not
+duplicated.
+
+An active real Payment Link prevents unnecessary duplicate links.
+
+Cancelled orders become CUSTOMER_CANCELLED and recovery stops.
+
+Associated Razorpay Payment Links are cancelled when supported.
+
+Customer ownership is checked before exposing recovery payment
+information.
+
+Material recovery events are stored in the audit trail.
+
+Razorpay webhook signatures are verified before accepting events.
+
+Recovery Endpoints
+
+All /api/admin/recovery/* endpoints require the ADMIN role.
+
+Method                  Endpoint                                   Purpose
+
+GET                     /api/admin/recovery/metrics              Recovery metrics
+(ALL, REAL,
+SIMULATED)
+
+GET                     /api/admin/recovery/cases                List recovery cases
+
+GET                     /api/admin/recovery/cases/{id}           Case detail, actions
+and audit trail
+
+POST                    /api/admin/recovery/cases/{id}/analyze   Analyze/re-analyze a
+non-terminal case
+
+POST                    /api/admin/recovery/cases/{id}/execute   Execute approved
+bounded action
+
+POST                    /api/admin/recovery/simulate             Create an isolated demo
+case
+
+The Razorpay webhook is authenticated through Razorpay signature
+verification, not customer/admin JWT authentication.
+
+Tech Stack
+
+Layer      Technology
+
+Frontend   React 19, Vite, Tailwind CSS
+Backend    Spring Boot 3, Java 21
+Security   Spring Security, JWT, BCrypt
+Database   MySQL, Spring Data JPA
+Payments   Razorpay Java SDK, Test Mode
+API Docs   Springdoc / OpenAPI
+HTTP       REST APIs
+Mapping    MapStruct
+Caching    Redis
+
+Project Structure
+
+nexcart/
+├── backend/
+│   ├── src/
+│   ├── pom.xml
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── .env.example
+└── docs/
+    ├── PRD.md
+    └── RECOVERAI.md
+
+Local Setup
+
+Prerequisites
+
+Java 21+
+
+Maven 3.9+
+
+Node.js + npm
+
+MySQL 8+
+
+Razorpay Test Mode credentials for REAL recovery testing
+
+Backend
+
+Create a MySQL database named nexcart and configure local secrets:
+
+spring.datasource.url=jdbc:mysql://localhost:3306/nexcart
+spring.datasource.username=YOUR_DB_USER
+spring.datasource.password=YOUR_DB_PASSWORD
+
+JWT_SECRET=YOUR_LONG_RANDOM_SECRET
 RAZORPAY_KEY_ID=rzp_test_...
 RAZORPAY_KEY_SECRET=...
 RAZORPAY_WEBHOOK_SECRET=...
 RECOVERY_MAX_ATTEMPTS=3
-```
 
-The repository includes [`backend/.env.example`](backend/.env.example) as a variable-name reference. If you use a `.env` file locally, load it through your IDE, shell, or deployment environment; Spring Boot does not automatically import that file. Rotate any credentials that may have been stored in local configuration before sharing or deploying the project.
+Never commit real credentials.
 
-### 2. Start the backend
+Start the backend:
 
-```bash
 cd backend
 mvn spring-boot:run
-```
 
-The API runs on `http://localhost:8080` by default. Swagger/OpenAPI is available through the Springdoc UI when the backend is running.
+Default API:
 
-### 3. Start the frontend
+http://localhost:8080
 
-```bash
+Frontend
+
 cd frontend
 npm install
 npm run dev
-```
 
-Vite serves the application on `http://localhost:5173` by default. The backend CORS configuration allows this local origin.
+Default frontend:
 
-## Build and test
+http://localhost:5173
 
-```bash
+Build and Test
+
 # Backend
 cd backend
 mvn test
 
-# Frontend production build
+# Frontend
 cd ../frontend
 npm run build
-
-# Frontend lint
 npm run lint
-```
 
-## Security notes
+Security
 
-- Authentication is stateless; the client supplies its JWT on protected requests.
-- Passwords are stored using BCrypt.
-- Customer ownership checks protect customer payment/order access in the service layer.
-- Admin APIs are role protected.
-- Razorpay webhook requests are signature-verified.
-- Keep database passwords, JWT secrets, Razorpay key secrets, and webhook secrets outside version control in real deployments.
-- Update the development-only CORS origin and security logging settings before production deployment.
+Stateless JWT authentication
 
-## Documentation
+BCrypt password hashing
 
-- [Product requirements and roadmap](docs/PRD.md)
-- [RecoverAI overview](docs/RECOVERAI.md)
+Role-based admin authorization
+
+Customer ownership checks
+
+Backend-enforced recovery guardrails
+
+Idempotent recovery actions
+
+Razorpay webhook signature verification
+
+Secrets kept outside version control
+
+Simulated transactions isolated from real gateway activity
+
+No Razorpay secret exposed to the frontend
+
+Demo Flow
+
+For the Track 3 demonstration:
+
+1. Customer places a NexCart order
+2. Razorpay Test Mode payment fails
+3. RecoverAI creates a recovery case
+4. RecoverAI analyzes the failure
+5. Recovery action is recommended
+6. Backend guardrail approves the bounded action
+7. Razorpay Payment Link is generated
+8. Customer receives an in-app recovery notification
+9. Customer completes payment securely
+10. Razorpay sends signed payment webhook
+11. Recovery case becomes RECOVERED
+12. Order/payment state is updated
+13. Recovered amount and recovery rate are updated
+14. Audit trail shows the complete journey
+
+Example judge-facing story
+
+RecoverAI does not just identify lost revenue. It decides a safe
+recovery intervention, executes it within financial guardrails, brings
+the customer back to payment, observes the outcome, and measures the
+revenue actually recovered.
+
+Buildathon Track
+
+Razorpay Buildathon --- Track 03: AI Revenue Recovery
+
+Problem
+
+Failed payments and checkout issues create immediate revenue at risk.
+Merchants need a system that can identify that risk and take the right
+recovery action without uncontrolled financial automation.
+
+Solution
+
+NexCart RecoverAI closes that loop:
+
+Detect → Diagnose → Decide → Act → Measure
+
+It combines AI/fallback decisioning, bounded financial actions, Razorpay
+Test Mode payments, customer recovery notifications, webhook-driven
+resolution, guardrails, idempotency, simulation, metrics, and a complete
+audit trail.
+
+Documentation
+
+docs/PRD.md --- product requirements and roadmap
+
+docs/RECOVERAI.md --- RecoverAI implementation details
+
+Important Note
+
+This project uses Razorpay Test Mode for payment demonstrations.
+Simulated cases are synthetic and are always separated from real
+recovery metrics.
