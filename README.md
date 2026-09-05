@@ -113,11 +113,10 @@ Payment failure
 
 ### How the decision engine works
 
-The current implementation uses a clearly labeled `DETERMINISTIC_FALLBACK` decision service. It evaluates the failed payment amount and previous recovery attempts to recommend one typed action:
+RecoverAI uses Gemini as its server-side decision provider when `GEMINI_API_KEY` is configured. Gemini receives a minimal, non-PII recovery context and returns one structured recommendation. The backend validates that output, calculates expected recovery itself, and applies all guardrails before any action can run. If Gemini is unavailable or returns invalid output, the clearly labeled `DETERMINISTIC_FALLBACK` provider keeps recovery operational.
 
 - `RETRY_PAYMENT`
 - `CREATE_PAYMENT_LINK`
-- `SEND_RECOVERY_MESSAGE`
 - `NO_ACTION`
 
 Each decision stores probability, expected recovery amount, confidence, risk level, reason, source, and guardrail result.
@@ -176,6 +175,8 @@ RAZORPAY_KEY_ID=rzp_test_...
 RAZORPAY_KEY_SECRET=YOUR_RAZORPAY_SECRET
 RAZORPAY_WEBHOOK_SECRET=YOUR_WEBHOOK_SECRET
 RECOVERY_MAX_ATTEMPTS=3
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 Use [`backend/.env.example`](backend/.env.example) as a variable reference. Never commit real credentials.

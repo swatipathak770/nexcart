@@ -2,7 +2,7 @@
 
 RecoverAI is NexCart's bounded autonomous recovery module: `DETECT → DIAGNOSE → DECIDE → ACT → MEASURE`.
 
-Normal failed payments create a persistent `RecoveryCase`. The typed, deterministic fallback AI decision engine selects only `RETRY_PAYMENT`, `CREATE_PAYMENT_LINK`, `SEND_RECOVERY_MESSAGE`, or `NO_ACTION`. Backend guardrails cap recovery at three attempts and payment retries at two; money, orders, access control and external calls cannot be modified by the AI.
+Normal failed payments create a persistent `RecoveryCase`. When configured, Gemini analyzes a safe, structured recovery context and recommends only `RETRY_PAYMENT`, `CREATE_PAYMENT_LINK`, or `NO_ACTION`. The backend validates the JSON response and retains deterministic rules as `DETERMINISTIC_FALLBACK` for missing keys, timeout/API failures, malformed output, or invalid recommendations. Backend guardrails cap recovery at three attempts and payment retries at two; Gemini cannot modify money, orders, access control, database state, or external calls.
 
 The module persists cases, actions and append-only audit records. Metrics include at-risk revenue, recovered revenue, recovery rate, expected recovery, and action distribution, filterable by real/simulated data. Use the admin-only `/admin/recovery` screen and its safe simulation to demo the same real engine.
 

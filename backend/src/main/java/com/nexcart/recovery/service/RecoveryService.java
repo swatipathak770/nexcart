@@ -1,8 +1,8 @@
 package com.nexcart.recovery.service;
 
 import com.nexcart.entity.*;
-import com.nexcart.recovery.ai.AIRecoveryService;
-import com.nexcart.recovery.dto.RecoveryDecision;
+import com.nexcart.recovery.ai.RecoveryDecisionService;
+import com.nexcart.recovery.dto.*;
 import com.nexcart.recovery.entity.*;
 import com.nexcart.recovery.enums.*;
 import com.nexcart.recovery.repository.*;
@@ -21,7 +21,7 @@ import java.util.*;
 @Service @RequiredArgsConstructor @Transactional
 public class RecoveryService {
  private static final Set<RecoveryStatus> TERMINAL_STATUSES = EnumSet.of(RecoveryStatus.RECOVERED, RecoveryStatus.CUSTOMER_CANCELLED, RecoveryStatus.EXHAUSTED, RecoveryStatus.FAILED, RecoveryStatus.NO_ACTION);
- private final RecoveryCaseRepository cases; private final RecoveryActionRepository actions; private final RecoveryAuditRepository audits; private final PaymentRepository payments; private final OrderRepository orders; private final AIRecoveryService ai; private final RazorpayClient razorpay;
+ private final RecoveryCaseRepository cases; private final RecoveryActionRepository actions; private final RecoveryAuditRepository audits; private final PaymentRepository payments; private final OrderRepository orders; private final RecoveryDecisionService decisions; private final RazorpayClient razorpay;
  @Value("${recovery.max-attempts:3}") private int maxAttempts;
 
  public void detectFailedPayment(Payment payment) {
@@ -32,10 +32,13 @@ public class RecoveryService {
   audit(c,"PAYMENT_FAILED", payment.getFailureReason()); audit(c,"RECOVERY_CASE_CREATED","Created from NexCart payment failure"); analyze(c.getId());
  }
  public RecoveryCase analyze(Long id) {
-  RecoveryCase c=getForUpdate(id); if(isCancelled(c)) return markCustomerCancelled(c, "Customer cancelled this order."); ensureNotTerminal(c, "analyzed"); c.setStatus(RecoveryStatus.ANALYZING); c.setDecisionSource("DETERMINISTIC_FALLBACK"); audit(c,"RECOVERY_ANALYSIS_STARTED","Decision source: DETERMINISTIC_FALLBACK");
-  RecoveryDecision d=ai.decide(c); RecoveryActionType allowed=guard(c,d.recommendedAction());
-  c.setRecoveryProbability(d.recoveryProbability()); c.setExpectedRecoveryAmount(d.expectedRecoveryAmount()); c.setRecommendedAction(allowed); c.setDecisionReason(d.reason()); c.setConfidence(d.confidence()); c.setRiskLevel(d.riskLevel()); c.setRecoveryScore(d.recoveryProbability().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()); c.setGuardrailResult(allowed==d.recommendedAction() ? "APPROVED: " + allowed : "REJECTED: " + d.recommendedAction() + "; allowed " + allowed); c.setStatus(allowed==RecoveryActionType.NO_ACTION?RecoveryStatus.NO_ACTION:RecoveryStatus.ACTION_RECOMMENDED); cases.save(c);
-  audit(c,"DETERMINISTIC_DECISION_CREATED",d.recommendedAction()+" | source: "+c.getDecisionSource()+" | "+d.reason()); audit(c,allowed==d.recommendedAction()?"GUARDRAIL_APPROVED":"GUARDRAIL_REJECTED",c.getGuardrailResult()); return c;
+  RecoveryCase c=getForUpdate(id); if(isCancelled(c)) return markCustomerCancelled(c, "Customer cancelled this order."); ensureNotTerminal(c, "analyzed"); c.setStatus(RecoveryStatus.ANALYZING); audit(c,"AI_ANALYSIS_STARTED","Recovery context prepared; AI recommendation is validated before guardrails.");
+  RecoveryDecisionResult result=decisions.decide(buildContext(c)); RecoveryDecision d=result.decision(); c.setDecisionSource(result.source());
+  if("DETERMINISTIC_FALLBACK".equals(result.source())) audit(c,"AI_FALLBACK_USED","Decision source: DETERMINISTIC_FALLBACK; reason: "+result.fallbackReason());
+  else audit(c,"AI_DECISION_CREATED",d.recommendedAction()+" | probability: "+d.recoveryProbability()+" | confidence: "+d.confidence()+" | risk: "+d.riskLevel());
+  audit(c,"AI_DECISION_VALIDATED","Validated bounded action and decision schema."); RecoveryActionType allowed=guard(c,d.recommendedAction());
+  c.setRecoveryProbability(d.recoveryProbability()); c.setExpectedRecoveryAmount(c.getAmount().multiply(d.recoveryProbability()).setScale(2, RoundingMode.HALF_UP)); c.setRecommendedAction(allowed); c.setDecisionReason(d.reason()); c.setConfidence(d.confidence().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP)+"%"); c.setRiskLevel(d.riskLevel()); c.setRecoveryScore(d.recoveryProbability().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()); c.setGuardrailResult(allowed==d.recommendedAction() ? "APPROVED: " + allowed : "REJECTED: " + d.recommendedAction() + "; allowed " + allowed); c.setStatus(allowed==RecoveryActionType.NO_ACTION?RecoveryStatus.NO_ACTION:RecoveryStatus.ACTION_RECOMMENDED); cases.save(c);
+  audit(c,"DECISION_CREATED",d.recommendedAction()+" | source: "+c.getDecisionSource()+" | "+d.reason()); audit(c,allowed==d.recommendedAction()?"GUARDRAIL_APPROVED":"GUARDRAIL_REJECTED",c.getGuardrailResult()); return c;
  }
  public RecoveryCase execute(Long id) {
   RecoveryCase c=getForUpdate(id); if(isCancelled(c)) return markCustomerCancelled(c, "Customer cancelled this order."); ensureNotTerminal(c, "executed");
@@ -103,6 +106,11 @@ public class RecoveryService {
  }
  private void completePaymentLink(RecoveryAction action, String razorpayPaymentId){ RecoveryCase c=action.getRecoveryCase(); if(c==null||c.getOrder()==null||latestOrderIsCancelled(c.getOrder().getId())) { if(c != null) markCustomerCancelled(c, "Customer cancelled this order."); return; } if(c.getStatus()==RecoveryStatus.RECOVERED)return; payments.findByOrderId(c.getOrder().getId()).ifPresent(payment->{payment.setPaymentStatus(PaymentStatus.SUCCESS);payment.setRazorpayPaymentId(razorpayPaymentId);payment.setPaidAt(LocalDateTime.now());payment.setFailureReason(null);Order latest=orders.findById(c.getOrder().getId()).orElse(c.getOrder());latest.setStatus(OrderStatus.CONFIRMED);orders.save(latest);markRecovered(payments.save(payment));}); }
  private boolean isCancelled(RecoveryCase c) { return c.getOrder() != null && latestOrderIsCancelled(c.getOrder().getId()); }
+ private RecoveryContext buildContext(RecoveryCase c) {
+  List<RecoveryAction> prior=actions.findByRecoveryCaseIdOrderByCreatedAtAsc(c.getId()); Payment payment=c.getOrder()==null?null:payments.findByOrderId(c.getOrder().getId()).orElse(null);
+  long minutes=c.getCreatedAt()==null?0:Math.max(0, java.time.Duration.between(c.getCreatedAt(), LocalDateTime.now()).toMinutes());
+  return new RecoveryContext(c.getId(), c.getOrder()==null?null:c.getOrder().getId(), c.getAmount(), c.getCurrency(), payment==null?null:String.valueOf(payment.getPaymentStatus()), c.getFailureReason(), payment==null?0:1, c.getActionAttempts()==null?0:c.getActionAttempts(), prior.stream().map(a->a.getAction()+":"+(a.isSuccessful()?"COMPLETED":"PENDING")).toList(), String.valueOf(c.getStatus()), c.getOrder()==null?null:String.valueOf(c.getOrder().getStatus()), hasActivePaymentLink(c), minutes, c.isSimulated());
+ }
  private boolean latestOrderIsCancelled(Long orderId) { return orders.findById(orderId).map(order -> order.getStatus() == OrderStatus.CANCELLED).orElse(true); }
  private boolean hasActivePaymentLink(RecoveryCase c) { return actions.findByRecoveryCaseIdOrderByCreatedAtAsc(c.getId()).stream().anyMatch(action -> action.getAction() == RecoveryActionType.CREATE_PAYMENT_LINK && action.isSuccessful() && action.getPaymentLink() != null); }
  private boolean hasEquivalentAction(RecoveryCase c, RecoveryActionType action) { if(action != RecoveryActionType.RETRY_PAYMENT && action != RecoveryActionType.CREATE_PAYMENT_LINK) return false; return (c.getStatus()==RecoveryStatus.ACTION_PENDING && c.getExecutedAction()==action) || actions.findByRecoveryCaseIdOrderByCreatedAtAsc(c.getId()).stream().anyMatch(existing -> existing.getAction()==action && existing.isSuccessful()); }

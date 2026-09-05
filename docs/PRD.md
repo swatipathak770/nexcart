@@ -57,7 +57,7 @@ This document describes only features implemented in the repository.
 ### RecoverAI
 
 - A payment failure creates a persistent recovery case.
-- A deterministic fallback decision service selects `RETRY_PAYMENT`, `CREATE_PAYMENT_LINK`, `SEND_RECOVERY_MESSAGE`, or `NO_ACTION`.
+- Gemini provides a structured decision when configured; otherwise the deterministic fallback selects `RETRY_PAYMENT`, `CREATE_PAYMENT_LINK`, or `NO_ACTION`.
 - The service records decision source, reason, confidence, risk level, probability, expected recovery amount, actions, and audit events.
 - The backend blocks recovery actions for terminal cases: `RECOVERED`, `CUSTOMER_CANCELLED`, `EXHAUSTED`, `FAILED`, and `NO_ACTION`.
 - Equivalent completed or pending retry/payment-link actions are skipped to prevent duplicates.

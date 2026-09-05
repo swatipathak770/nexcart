@@ -1,10 +1,12 @@
 package com.nexcart.recovery.service;
 
-import com.nexcart.recovery.ai.AIRecoveryService;
+import com.nexcart.recovery.ai.RecoveryDecisionService;
 import com.nexcart.recovery.entity.RecoveryAction;
 import com.nexcart.recovery.entity.RecoveryCase;
 import com.nexcart.recovery.enums.RecoveryActionType;
 import com.nexcart.recovery.enums.RecoveryStatus;
+import com.nexcart.recovery.dto.RecoveryDecision;
+import com.nexcart.recovery.dto.RecoveryDecisionResult;
 import com.nexcart.recovery.repository.RecoveryActionRepository;
 import com.nexcart.recovery.repository.RecoveryAuditRepository;
 import com.nexcart.recovery.repository.RecoveryCaseRepository;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 class RecoveryServiceTest {
@@ -28,9 +31,9 @@ class RecoveryServiceTest {
     private final RecoveryAuditRepository audits = mock(RecoveryAuditRepository.class);
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final OrderRepository orders = mock(OrderRepository.class);
-    private final AIRecoveryService ai = mock(AIRecoveryService.class);
+    private final RecoveryDecisionService decisions = mock(RecoveryDecisionService.class);
     private final RazorpayClient razorpay = mock(RazorpayClient.class);
-    private final RecoveryService service = new RecoveryService(cases, actions, audits, payments, orders, ai, razorpay);
+    private final RecoveryService service = new RecoveryService(cases, actions, audits, payments, orders, decisions, razorpay);
     {
         ReflectionTestUtils.setField(service, "maxAttempts", 3);
     }
@@ -86,5 +89,26 @@ class RecoveryServiceTest {
                 && action.getPaymentLink().startsWith("simulated://payment-links/REC-")));
         org.junit.jupiter.api.Assertions.assertEquals(RecoveryStatus.RECOVERED, recoveryCase.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("4999.00"), recoveryCase.getRecoveredAmount());
+    }
+
+    @org.junit.jupiter.api.Test
+    void validatedAiRecommendationPassesGuardrailsAndExecutesInSimulation() {
+        RecoveryCase recoveryCase = RecoveryCase.builder().amount(new BigDecimal("1799.00"))
+                .status(RecoveryStatus.DETECTED).simulated(true).build();
+        RecoveryDecision decision = new RecoveryDecision(RecoveryActionType.CREATE_PAYMENT_LINK,
+                new BigDecimal("0.58"), new BigDecimal("0.80"), "A secure link is the safest option.", "LOW");
+        when(cases.findByIdForUpdate(1L)).thenReturn(Optional.of(recoveryCase));
+        when(actions.findByRecoveryCaseIdOrderByCreatedAtAsc(null)).thenReturn(List.of());
+        when(decisions.decide(any())).thenReturn(new RecoveryDecisionResult(decision, "AI", null));
+        when(cases.save(recoveryCase)).thenReturn(recoveryCase);
+
+        service.analyze(1L);
+        service.execute(1L);
+
+        assertEquals("AI", recoveryCase.getDecisionSource());
+        assertEquals(RecoveryActionType.CREATE_PAYMENT_LINK, recoveryCase.getRecommendedAction());
+        assertEquals(new BigDecimal("1043.42"), recoveryCase.getExpectedRecoveryAmount());
+        assertEquals(RecoveryStatus.RECOVERED, recoveryCase.getStatus());
+        verifyNoInteractions(razorpay);
     }
 }
