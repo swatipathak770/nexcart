@@ -1,20 +1,20 @@
 package com.nexcart.security;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-@Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -22,48 +22,56 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final CustomUserDetailsService userDetailsService;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (path == null || path.isBlank()) {
+            path = request.getRequestURI();
+        }
+        return path.startsWith("/api/auth/") || path.startsWith("/api/webhooks/");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        System.out.println("JwtAuthenticationFilter Executed");
-
         final String authHeader = request.getHeader("Authorization");
 
-        System.out.println("Authorization Header = " + authHeader);
-
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            System.out.println("No Bearer Token");
             filterChain.doFilter(request, response);
             return;
         }
 
         String jwt = authHeader.substring(7);
+        try {
+            String username = jwtService.extractUsername(jwt);
+            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-        System.out.println("JWT = " + jwt);
+            if (jwtService.isTokenValid(jwt, userDetails)) {
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities());
 
-        String username = jwtService.extractUsername(jwt);
-
-        System.out.println("Username = " + username);
-
-        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-
-        if (jwtService.isTokenValid(jwt, userDetails)) {
-
-            System.out.println("Token Valid");
-
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities());
-
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-
-            System.out.println("Authentication Set");
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            } else {
+                rejectInvalidToken(response);
+                return;
+            }
+        } catch (JwtException | IllegalArgumentException | AuthenticationException ex) {
+            SecurityContextHolder.clearContext();
+            rejectInvalidToken(response);
+            return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void rejectInvalidToken(HttpServletResponse response) throws IOException {
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired bearer token");
     }
 }

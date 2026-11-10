@@ -10,15 +10,18 @@ import com.nexcart.repository.OrderRepository;
 import com.nexcart.repository.PaymentRepository;
 import com.razorpay.RazorpayClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.*;
 import java.time.LocalDateTime;
 import java.util.*;
 
-@Service @RequiredArgsConstructor @Transactional
+@Service @RequiredArgsConstructor @Transactional @Slf4j
 public class RecoveryService {
  private static final Set<RecoveryStatus> TERMINAL_STATUSES = EnumSet.of(RecoveryStatus.RECOVERED, RecoveryStatus.CUSTOMER_CANCELLED, RecoveryStatus.EXHAUSTED, RecoveryStatus.FAILED, RecoveryStatus.NO_ACTION);
  private final RecoveryCaseRepository cases; private final RecoveryActionRepository actions; private final RecoveryAuditRepository audits; private final PaymentRepository payments; private final OrderRepository orders; private final RecoveryDecisionService decisions; private final RazorpayClient razorpay;
@@ -38,6 +41,7 @@ public class RecoveryService {
   else audit(c,"AI_DECISION_CREATED",d.recommendedAction()+" | probability: "+d.recoveryProbability()+" | confidence: "+d.confidence()+" | risk: "+d.riskLevel());
   audit(c,"AI_DECISION_VALIDATED","Validated bounded action and decision schema."); RecoveryActionType allowed=guard(c,d.recommendedAction());
   c.setRecoveryProbability(d.recoveryProbability()); c.setExpectedRecoveryAmount(c.getAmount().multiply(d.recoveryProbability()).setScale(2, RoundingMode.HALF_UP)); c.setRecommendedAction(allowed); c.setDecisionReason(d.reason()); c.setConfidence(d.confidence().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP)+"%"); c.setRiskLevel(d.riskLevel()); c.setRecoveryScore(d.recoveryProbability().multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP).intValue()); c.setGuardrailResult(allowed==d.recommendedAction() ? "APPROVED: " + allowed : "REJECTED: " + d.recommendedAction() + "; allowed " + allowed); c.setStatus(allowed==RecoveryActionType.NO_ACTION?RecoveryStatus.NO_ACTION:RecoveryStatus.ACTION_RECOMMENDED); cases.save(c);
+  log.info("RecoverAI decision recorded; caseId={} source={} action={} simulated={}", c.getId(), c.getDecisionSource(), allowed, c.isSimulated());
   audit(c,"DECISION_CREATED",d.recommendedAction()+" | source: "+c.getDecisionSource()+" | "+d.reason()); audit(c,allowed==d.recommendedAction()?"GUARDRAIL_APPROVED":"GUARDRAIL_REJECTED",c.getGuardrailResult()); return c;
  }
  public RecoveryCase execute(Long id) {
@@ -46,6 +50,7 @@ public class RecoveryService {
   if(hasEquivalentAction(c, action)) { audit(c,"ACTION_SKIPPED","Equivalent "+action+" action is already pending or completed; no duplicate action was executed."); return cases.save(c); }
   if(action==RecoveryActionType.CREATE_PAYMENT_LINK && hasActivePaymentLink(c)) { audit(c,"ACTION_SKIPPED","A secure payment link already exists; no duplicate Razorpay link was created."); return cases.save(c); }
   c.setStatus(RecoveryStatus.ACTION_PENDING); c.setActionAttempts(c.getActionAttempts()+1); c.setExecutedAction(action); RecoveryAction event=RecoveryAction.builder().recoveryCase(c).action(action).build(); audit(c,"ACTION_STARTED",action.name());
+  log.info("RecoverAI action started; caseId={} action={} simulated={}", c.getId(), action, c.isSimulated());
   if(c.isSimulated()) return executeSimulated(c, action, event);
   try { if(action==RecoveryActionType.CREATE_PAYMENT_LINK){ JSONObject o=new JSONObject(); o.put("amount",c.getAmount().multiply(BigDecimal.valueOf(100)).longValueExact()); o.put("currency",c.getCurrency()); o.put("reference_id","REC-"+c.getId()); o.put("description","NexCart RecoverAI payment recovery"); com.razorpay.PaymentLink link=razorpay.paymentLink.create(o); event.setRazorpayPaymentLinkId(link.get("id")); event.setPaymentLink(link.get("short_url")); audit(c,"PAYMENT_LINK_CREATED",event.getPaymentLink()); }
    else if(action==RecoveryActionType.SEND_RECOVERY_MESSAGE){ event.setMessage("Your NexCart order worth ₹"+c.getAmount()+" is waiting. Complete payment using your secure payment link."); audit(c,"RECOVERY_MESSAGE_GENERATED",event.getMessage()); }
@@ -55,11 +60,44 @@ public class RecoveryService {
   actions.save(event); return cases.save(c);
  }
  public void markRecovered(Payment payment){ if(payment==null||payment.getOrder()==null||payment.getPaymentStatus()!= PaymentStatus.SUCCESS)return; cases.findFirstByOrderIdOrderByCreatedAtDesc(payment.getOrder().getId()).map(c -> getForUpdate(c.getId())).ifPresent(c->{if(latestOrderIsCancelled(payment.getOrder().getId())) { markCustomerCancelled(c, "Customer cancelled this order."); return; } if(c.getStatus()!=RecoveryStatus.RECOVERED){c.setStatus(RecoveryStatus.RECOVERED);c.setRecoveredAmount(payment.getAmount());c.setResolvedAt(LocalDateTime.now());cases.save(c);audit(c,"PAYMENT_SUCCESSFUL",payment.getRazorpayPaymentId());audit(c,"RECOVERY_COMPLETED","Recovered ₹"+payment.getAmount());}}); }
- public List<RecoveryCase> list(String mode){return "REAL".equalsIgnoreCase(mode)?cases.findBySimulated(false):"SIMULATED".equalsIgnoreCase(mode)?cases.findBySimulated(true):cases.findAll();}
+ public Page<RecoveryCase> list(String mode, Pageable pageable){return "REAL".equalsIgnoreCase(mode)?cases.findBySimulated(false,pageable):"SIMULATED".equalsIgnoreCase(mode)?cases.findBySimulated(true,pageable):cases.findAll(pageable);}
+ public Map<String,Object> metrics(String mode){
+  boolean simulatedOnly="SIMULATED".equalsIgnoreCase(mode);
+  boolean realOnly="REAL".equalsIgnoreCase(mode);
+  RecoveryMetricsProjection displayed=simulatedOnly||realOnly
+    ? cases.aggregateMetrics(simulatedOnly,RecoveryStatus.RECOVERED,RecoveryStatus.CUSTOMER_CANCELLED,TERMINAL_STATUSES)
+    : cases.aggregateAllMetrics(RecoveryStatus.RECOVERED,RecoveryStatus.CUSTOMER_CANCELLED,TERMINAL_STATUSES);
+  RecoveryMetricsProjection financial=simulatedOnly?displayed:realOnly?displayed:cases.aggregateMetrics(false,RecoveryStatus.RECOVERED,RecoveryStatus.CUSTOMER_CANCELLED,TERMINAL_STATUSES);
+  RecoveryMetricsProjection simulated=simulatedOnly?displayed:cases.aggregateMetrics(true,RecoveryStatus.RECOVERED,RecoveryStatus.CUSTOMER_CANCELLED,TERMINAL_STATUSES);
+  List<Object[]> distribution=simulatedOnly||realOnly?cases.countActionsByRecommendation(simulatedOnly):cases.countAllActionsByRecommendation();
+  Map<String,Object> result=metricValues(financial,displayed,distribution);
+  Map<String,Object> simulatedValues=simulatedOnly?result:metricValues(simulated,simulated,cases.countActionsByRecommendation(true));
+  result.put("simulatedRevenueAtRisk",simulatedValues.get("revenueAtRisk"));
+  result.put("simulatedRevenueRecovered",simulatedValues.get("revenueRecovered"));
+  result.put("simulatedExpectedRecoverable",simulatedValues.get("expectedRecoverable"));
+  result.put("simulatedRecoveredCases",simulatedValues.get("recoveredCases"));
+  return result;
+ }
+ private Map<String,Object> metricValues(RecoveryMetricsProjection financial,RecoveryMetricsProjection displayed,List<Object[]> actionCounts){
+  BigDecimal risk=financial.getRevenueAtRisk()==null?BigDecimal.ZERO:financial.getRevenueAtRisk();
+  BigDecimal recovered=financial.getRevenueRecovered()==null?BigDecimal.ZERO:financial.getRevenueRecovered();
+  BigDecimal expected=financial.getExpectedRecoverable()==null?BigDecimal.ZERO:financial.getExpectedRecoverable();
+  BigDecimal eligibleRevenue=risk.add(recovered);
+  Map<String,Object> result=new LinkedHashMap<>();
+  result.put("revenueAtRisk",risk);result.put("revenueRecovered",recovered);result.put("expectedRecoverable",expected);
+  result.put("casesDetected",displayed.getTotalCases()==null?0:displayed.getTotalCases());
+  result.put("recoveredCases",financial.getRecoveredCases()==null?0:financial.getRecoveredCases());
+  result.put("recoveryRate",eligibleRevenue.signum()==0?BigDecimal.ZERO:recovered.multiply(BigDecimal.valueOf(100)).divide(eligibleRevenue,2,RoundingMode.HALF_UP));
+  Map<String,Long> distribution=new LinkedHashMap<>();
+  for(Object[] row:actionCounts) distribution.put(((RecoveryActionType)row[0]).name(),((Number)row[1]).longValue());
+  result.put("actionDistribution",distribution);
+  return result;
+ }
  public RecoveryCase simulate(){ RecoveryCase c=cases.save(RecoveryCase.builder().amount(new BigDecimal("4999.00")).type(RecoveryType.PAYMENT_FAILED).failureReason("Temporary payment timeout (DEMO / SIMULATED)").status(RecoveryStatus.DETECTED).simulated(true).build()); audit(c,"RECOVERY_CASE_CREATED","DEMO / SIMULATED scenario"); return analyze(c.getId()); }
  public RecoveryCase get(Long id){return cases.findById(id).orElseThrow(()->new NoSuchElementException("Recovery case not found"));}
  private RecoveryCase getForUpdate(Long id){return cases.findByIdForUpdate(id).orElseThrow(()->new NoSuchElementException("Recovery case not found"));}
  public List<RecoveryAction> actionList(Long id){return actions.findByRecoveryCaseIdOrderByCreatedAtAsc(id);} public List<RecoveryAuditLog> auditList(Long id){return audits.findByRecoveryCaseIdOrderByCreatedAtAsc(id);}
+ public Page<RecoveryAuditLog> auditPage(Long id, Pageable pageable){get(id); return audits.findByRecoveryCaseIdOrderByCreatedAtDesc(id,pageable);}
  public Optional<String> activePaymentLinkFor(Order order){
   if(order == null || latestOrderIsCancelled(order.getId())) return Optional.empty();
   return cases.findFirstByOrderIdOrderByCreatedAtDesc(order.getId()).filter(c -> c.getStatus() == RecoveryStatus.ACTION_PENDING).flatMap(c -> actions.findByRecoveryCaseIdOrderByCreatedAtAsc(c.getId()).stream().filter(a -> a.getAction() == RecoveryActionType.CREATE_PAYMENT_LINK && a.isSuccessful() && a.getPaymentLink() != null).reduce((first, second) -> second).map(RecoveryAction::getPaymentLink));

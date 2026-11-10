@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 class RecoveryDecisionServiceTest {
@@ -50,6 +51,31 @@ class RecoveryDecisionServiceTest {
     }
 
     @Test
+    void malformedAiResponseFallsBack() throws Exception {
+        when(ai.isConfigured()).thenReturn(true);
+        when(ai.decide(context)).thenThrow(new IllegalArgumentException("Malformed Gemini JSON"));
+        when(fallback.decide(context)).thenReturn(decision(RecoveryActionType.RETRY_PAYMENT, "0.58"));
+
+        RecoveryDecisionResult result = service.decide(context);
+
+        assertEquals("DETERMINISTIC_FALLBACK", result.source());
+        assertEquals(RecoveryActionType.RETRY_PAYMENT, result.decision().recommendedAction());
+    }
+
+    @Test
+    void deterministicFallbackStopsAtSupportedNoActionAfterRepeatedAttempts() {
+        RecoveryContext repeatedAttempts = new RecoveryContext(
+                1L, 2L, new BigDecimal("1799.00"), "INR", "FAILED", "Timeout",
+                1, 2, List.of(), "ACTION_RECOMMENDED", "PENDING", false, 1, false);
+
+        RecoveryDecision result = new DeterministicRecoveryDecisionProvider().decide(repeatedAttempts);
+
+        assertEquals(RecoveryActionType.NO_ACTION, result.recommendedAction());
+        assertEquals("MEDIUM", result.riskLevel());
+        assertEquals(result, service.validate(result));
+    }
+
+    @Test
     void parsesGeminiStructuredDecision() throws Exception {
         AiRecoveryDecisionProvider provider = new AiRecoveryDecisionProvider(
                 new com.fasterxml.jackson.databind.ObjectMapper(), RestClient.builder(), "test-key", "gemini-2.5-flash");
@@ -63,6 +89,14 @@ class RecoveryDecisionServiceTest {
         assertEquals(new BigDecimal("0.58"), result.recoveryProbability());
         assertEquals(new BigDecimal("0.7"), result.confidence());
         assertEquals("LOW", result.riskLevel());
+    }
+
+    @Test
+    void malformedGeminiPayloadIsRejectedForFallback() {
+        AiRecoveryDecisionProvider provider = new AiRecoveryDecisionProvider(
+                new com.fasterxml.jackson.databind.ObjectMapper(), RestClient.builder(), "test-key", "gemini-2.5-flash");
+
+        assertThrows(Exception.class, () -> provider.parse("{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"not-json\"}]}}]}"));
     }
 
     private RecoveryDecision decision(RecoveryActionType action, String probability) {

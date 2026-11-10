@@ -1,7 +1,9 @@
 import api from "../services/api";
 
-export async function getCategories() {
-  const response = await api.get("/api/categories");
+export async function getCategories(params = {}) {
+  const response = await api.get("/api/categories", {
+    params: { page: 0, size: 20, sortBy: "name", direction: "asc", ...params },
+  });
   return response.data.data;
 }
 

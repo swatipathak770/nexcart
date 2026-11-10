@@ -2,14 +2,14 @@ package com.nexcart.service;
 
 import com.nexcart.dto.request.CategoryRequest;
 import com.nexcart.dto.response.CategoryResponse;
-
-import java.util.List;
+import com.nexcart.dto.response.PagedResponse;
+import org.springframework.data.domain.Pageable;
 
 public interface CategoryService {
 
     CategoryResponse createCategory(CategoryRequest request);
 
-    List<CategoryResponse> getAllCategories();
+    PagedResponse<CategoryResponse> getAllCategories(Pageable pageable);
 
     CategoryResponse getCategoryById(Long id);
 

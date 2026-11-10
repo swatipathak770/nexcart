@@ -4,15 +4,18 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import com.nexcart.dto.request.BrandRequest;
 import com.nexcart.dto.response.ApiResponse;
 import com.nexcart.dto.response.BrandResponse;
+import com.nexcart.dto.response.PagedResponse;
 import com.nexcart.service.BrandService;
+import com.nexcart.util.PageableFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Pageable;
 
+import java.util.Set;
 import java.time.LocalDateTime;
-import java.util.List;
 @Tag(
         name = "Brand Management",
         description = "APIs for managing product brands"
@@ -40,12 +43,17 @@ public class BrandController {
     }
     @Operation(summary = "Get all brands")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<BrandResponse>>> getAllBrands() {
+    public ResponseEntity<ApiResponse<PagedResponse<BrandResponse>>> getAllBrands(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction) {
 
-        List<BrandResponse> response = brandService.getAllBrands();
+        Pageable pageable = PageableFactory.create(page, size, sortBy, direction, Set.of("id", "name"));
+        PagedResponse<BrandResponse> response = brandService.getAllBrands(pageable);
 
         return ResponseEntity.ok(
-                ApiResponse.<List<BrandResponse>>builder()
+                ApiResponse.<PagedResponse<BrandResponse>>builder()
                         .success(true)
                         .message("Brands fetched successfully")
                         .data(response)

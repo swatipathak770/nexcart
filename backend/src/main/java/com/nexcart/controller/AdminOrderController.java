@@ -1,8 +1,10 @@
 package com.nexcart.controller;
 
 import com.nexcart.dto.response.OrderResponse;
+import com.nexcart.dto.response.PagedResponse;
 import com.nexcart.entity.OrderStatus;
 import com.nexcart.service.AdminOrderService;
+import com.nexcart.util.PageableFactory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -10,8 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/admin/orders")
@@ -25,9 +28,14 @@ public class AdminOrderController {
 
     @GetMapping
     @Operation(summary = "Get All Orders")
-    public ResponseEntity<List<OrderResponse>> getAllOrders() {
+    public ResponseEntity<PagedResponse<OrderResponse>> getAllOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction) {
 
-        return ResponseEntity.ok(adminOrderService.getAllOrders());
+        Pageable pageable = pageable(page, size, sortBy, direction);
+        return ResponseEntity.ok(PagedResponse.from(adminOrderService.getAllOrders(pageable)));
     }
 
     @GetMapping("/{orderId}")
@@ -41,11 +49,16 @@ public class AdminOrderController {
 
     @GetMapping("/status/{status}")
     @Operation(summary = "Get Orders By Status")
-    public ResponseEntity<List<OrderResponse>> getOrdersByStatus(
-            @PathVariable OrderStatus status) {
+    public ResponseEntity<PagedResponse<OrderResponse>> getOrdersByStatus(
+            @PathVariable OrderStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction) {
 
         return ResponseEntity.ok(
-                adminOrderService.getOrdersByStatus(status));
+                PagedResponse.from(adminOrderService.getOrdersByStatus(status,
+                        pageable(page, size, sortBy, direction))));
     }
 
     @PatchMapping("/{orderId}/status")
@@ -56,5 +69,10 @@ public class AdminOrderController {
 
         return ResponseEntity.ok(
                 adminOrderService.updateOrderStatus(orderId, status));
+    }
+
+    private Pageable pageable(int page, int size, String sortBy, String direction) {
+        return PageableFactory.create(page, size, sortBy, direction,
+                Set.of("id", "createdAt", "totalAmount", "finalAmount", "status"));
     }
 }

@@ -1,6 +1,7 @@
 package com.nexcart.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -44,6 +45,7 @@ public class Order extends BaseEntity {
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
+    @BatchSize(size = 25)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
     @OneToOne(mappedBy = "order",

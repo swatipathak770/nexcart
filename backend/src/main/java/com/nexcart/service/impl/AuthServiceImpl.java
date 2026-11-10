@@ -38,6 +38,10 @@ public class AuthServiceImpl implements AuthService {
             throw new EmailAlreadyExistsException("Email already exists.");
         }
 
+        if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new IllegalStateException("Phone number is already registered.");
+        }
+
         User user = userMapper.toEntity(request, passwordEncoder);
 
         User savedUser = userRepository.save(user);

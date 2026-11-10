@@ -4,15 +4,19 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import com.nexcart.dto.request.CategoryRequest;
 import com.nexcart.dto.response.ApiResponse;
 import com.nexcart.dto.response.CategoryResponse;
+import com.nexcart.dto.response.PagedResponse;
 import com.nexcart.service.CategoryService;
+import com.nexcart.util.PageableFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Pageable;
+
+import java.util.Set;
 
 import java.time.LocalDateTime;
-import java.util.List;
 @Tag(
         name = "Category Management",
         description = "APIs for managing product categories"
@@ -42,12 +46,17 @@ public class CategoryController {
     }
     @Operation(summary = "Get all categories")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<CategoryResponse>>> getAllCategories() {
+    public ResponseEntity<ApiResponse<PagedResponse<CategoryResponse>>> getAllCategories(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction) {
 
-        List<CategoryResponse> response = categoryService.getAllCategories();
+        Pageable pageable = PageableFactory.create(page, size, sortBy, direction, Set.of("id", "name"));
+        PagedResponse<CategoryResponse> response = categoryService.getAllCategories(pageable);
 
-        ApiResponse<List<CategoryResponse>> apiResponse =
-                ApiResponse.<List<CategoryResponse>>builder()
+        ApiResponse<PagedResponse<CategoryResponse>> apiResponse =
+                ApiResponse.<PagedResponse<CategoryResponse>>builder()
                         .success(true)
                         .message("Categories fetched successfully")
                         .data(response)

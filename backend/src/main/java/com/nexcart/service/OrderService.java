@@ -1,6 +1,8 @@
 package com.nexcart.service;
 
 import com.nexcart.dto.response.OrderResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -8,7 +10,7 @@ public interface OrderService {
 
     OrderResponse placeOrder(String couponCode);
 
-    List<OrderResponse> getMyOrders();
+    Page<OrderResponse> getMyOrders(Pageable pageable);
 
     OrderResponse getOrderById(Long orderId);
 

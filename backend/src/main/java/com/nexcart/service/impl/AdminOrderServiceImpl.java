@@ -8,10 +8,11 @@ import com.nexcart.mapper.OrderMapper;
 import com.nexcart.repository.OrderRepository;
 import com.nexcart.service.AdminOrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -22,12 +23,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     private final OrderMapper orderMapper;
 
     @Override
-    public List<OrderResponse> getAllOrders() {
-
-        return orderRepository.findAll()
-                .stream()
-                .map(orderMapper::toResponse)
-                .toList();
+    public Page<OrderResponse> getAllOrders(Pageable pageable) {
+        return orderRepository.findAll(pageable).map(orderMapper::toResponse);
     }
 
     @Override
@@ -41,12 +38,8 @@ public class AdminOrderServiceImpl implements AdminOrderService {
     }
 
     @Override
-    public List<OrderResponse> getOrdersByStatus(OrderStatus status) {
-
-        return orderRepository.findByStatus(status)
-                .stream()
-                .map(orderMapper::toResponse)
-                .toList();
+    public Page<OrderResponse> getOrdersByStatus(OrderStatus status, Pageable pageable) {
+        return orderRepository.findByStatus(status, pageable).map(orderMapper::toResponse);
     }
 
     @Override

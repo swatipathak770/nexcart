@@ -13,12 +13,19 @@ import com.nexcart.service.OrderService;
 import com.nexcart.recovery.service.RecoveryService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.CacheEvict;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -45,14 +52,29 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"products", "productDetails"}, allEntries = true)
     public OrderResponse placeOrder(String couponCode) {
 
         User user = getCurrentUser();
 
-        List<Cart> cartItems = cartRepository.findByUser(user);
+        // Keep product rows as proxies until findByIdForUpdate acquires the lock;
+        // preloading product state with the cart can leave a stale stock value
+        // while a concurrent checkout waits for that lock.
+        List<Cart> cartItems = new ArrayList<>(cartRepository.findByUserForCheckout(user));
 
         if (cartItems.isEmpty()) {
             throw new RuntimeException("Cart is empty.");
+        }
+
+        // Lock product rows in a stable order so concurrent checkouts cannot oversell
+        // and competing multi-item checkouts do not acquire locks in opposite orders.
+        cartItems.sort(Comparator.comparing(cart -> cart.getProduct().getId()));
+        Map<Long, Product> lockedProducts = new HashMap<>();
+        for (Cart cart : cartItems) {
+            Long productId = cart.getProduct().getId();
+            Product lockedProduct = productRepository.findByIdForUpdate(productId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+            lockedProducts.put(productId, lockedProduct);
         }
 
         BigDecimal total = BigDecimal.ZERO;
@@ -60,7 +82,7 @@ public class OrderServiceImpl implements OrderService {
         // Calculate total amount
         for (Cart cart : cartItems) {
 
-            Product product = cart.getProduct();
+            Product product = lockedProducts.get(cart.getProduct().getId());
 
             if (product.getStock() < cart.getQuantity()) {
                 throw new RuntimeException(product.getName() + " is out of stock.");
@@ -115,7 +137,7 @@ public class OrderServiceImpl implements OrderService {
         // Create order items and reduce stock
         for (Cart cart : cartItems) {
 
-            Product product = cart.getProduct();
+            Product product = lockedProducts.get(cart.getProduct().getId());
 
             product.setStock(product.getStock() - cart.getQuantity());
             productRepository.save(product);
@@ -142,14 +164,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public List<OrderResponse> getMyOrders() {
+    public Page<OrderResponse> getMyOrders(Pageable pageable) {
 
         User user = getCurrentUser();
 
-        return orderRepository.findByUser(user)
-                .stream()
-                .map(this::withRecoveryLink)
-                .toList();
+        return orderRepository.findByUser(user, pageable).map(this::withRecoveryLink);
     }
 
     @Override
@@ -170,6 +189,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
+    @CacheEvict(cacheNames = {"products", "productDetails"}, allEntries = true)
     public void cancelOrder(Long orderId) {
 
         User user = getCurrentUser();
@@ -186,9 +206,13 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Order is already cancelled.");
         }
 
-        for (OrderItem item : order.getOrderItems()) {
+        List<OrderItem> orderItems = order.getOrderItems().stream()
+                .sorted(Comparator.comparing(item -> item.getProduct().getId()))
+                .toList();
+        for (OrderItem item : orderItems) {
 
-            Product product = item.getProduct();
+            Product product = productRepository.findByIdForUpdate(item.getProduct().getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
             product.setStock(product.getStock() + item.getQuantity());
 

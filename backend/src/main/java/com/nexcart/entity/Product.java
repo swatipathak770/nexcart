@@ -1,6 +1,7 @@
 package com.nexcart.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -12,6 +13,7 @@ import java.math.BigDecimal;
 @Builder
 @Entity
 @Table(name = "products")
+@BatchSize(size = 50)
 public class Product {
 
     @Id

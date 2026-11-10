@@ -8,10 +8,11 @@ import com.nexcart.mapper.PaymentMapper;
 import com.nexcart.repository.PaymentRepository;
 import com.nexcart.service.AdminPaymentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -21,12 +22,8 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
     private final PaymentRepository paymentRepository;
 
     @Override
-    public List<PaymentResponse> getAllPayments() {
-
-        return paymentRepository.findAll()
-                .stream()
-                .map(PaymentMapper::toResponse)
-                .toList();
+    public Page<PaymentResponse> getAllPayments(Pageable pageable) {
+        return paymentRepository.findAll(pageable).map(PaymentMapper::toResponse);
     }
 
     @Override
@@ -50,11 +47,7 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
     }
 
     @Override
-    public List<PaymentResponse> getPaymentsByStatus(PaymentStatus status) {
-
-        return paymentRepository.findByPaymentStatus(status)
-                .stream()
-                .map(PaymentMapper::toResponse)
-                .toList();
+    public Page<PaymentResponse> getPaymentsByStatus(PaymentStatus status, Pageable pageable) {
+        return paymentRepository.findByPaymentStatus(status, pageable).map(PaymentMapper::toResponse);
     }
 }

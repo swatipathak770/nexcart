@@ -67,7 +67,9 @@ function Register() {
     } catch (err) {
       setError(
         err.response?.data?.message ||
-        "Registration failed. Please try again."
+        (err.response
+          ? `Registration failed (HTTP ${err.response.status}). Please try again.`
+          : "Could not reach the server. Check that the backend is running and try again.")
       );
     } finally {
       setLoading(false);

@@ -5,15 +5,19 @@ import com.nexcart.entity.Payment;
 import com.nexcart.entity.PaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
 import java.util.Optional;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
-    @Override
     @EntityGraph(attributePaths = {"order"})
-    List<Payment> findAll();
+    Page<Payment> findAll(Pageable pageable);
 
     @Override
     @EntityGraph(attributePaths = {"order"})
@@ -27,10 +31,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByRazorpayOrderId(String razorpayOrderId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Payment p join fetch p.order where p.razorpayOrderId = :razorpayOrderId")
+    Optional<Payment> findByRazorpayOrderIdForUpdate(@Param("razorpayOrderId") String razorpayOrderId);
+
     Optional<Payment> findByRazorpayPaymentId(String razorpayPaymentId);
 
     @EntityGraph(attributePaths = {"order"})
-    List<Payment> findByPaymentStatus(PaymentStatus paymentStatus);
+    Page<Payment> findByPaymentStatus(PaymentStatus paymentStatus, Pageable pageable);
 
     boolean existsByOrderId(Long orderId);
 }

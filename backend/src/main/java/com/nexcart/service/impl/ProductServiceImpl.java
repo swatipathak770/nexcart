@@ -2,6 +2,7 @@ package com.nexcart.service.impl;
 
 import com.nexcart.dto.request.ProductRequest;
 import com.nexcart.dto.response.ProductResponse;
+import com.nexcart.dto.response.PagedResponse;
 import com.nexcart.entity.Brand;
 import com.nexcart.entity.Category;
 import com.nexcart.entity.Product;
@@ -16,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -32,6 +35,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductMapper productMapper;
 
     @Override
+    @CacheEvict(cacheNames = "products", allEntries = true)
     public ProductResponse createProduct(ProductRequest request) {
 
         if (productRepository.existsBySku(request.getSku())) {
@@ -54,24 +58,14 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductResponse> getAllProducts(
-            int page,
-            int size,
-            String sortBy,
-            String direction) {
-
-        Sort sort = direction.equalsIgnoreCase("desc")
-                ? Sort.by(sortBy).descending()
-                : Sort.by(sortBy).ascending();
-
-        Pageable pageable = PageRequest.of(page, size, sort);
-
-        return productRepository.findAll(pageable)
-                .map(productMapper::toResponse);
+    @Cacheable(cacheNames = "products", key = "'page-v2:all:' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
+    public PagedResponse<ProductResponse> getAllProducts(Pageable pageable) {
+        return PagedResponse.from(productRepository.findAll(pageable).map(productMapper::toResponse));
     }
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "productDetails", key = "#id")
     public ProductResponse getProductById(Long id) {
 
         Product product = getProduct(id);
@@ -80,6 +74,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {"products", "productDetails"}, allEntries = true)
     public ProductResponse updateProduct(Long id, ProductRequest request) {
 
         Product product = getProduct(id);
@@ -111,6 +106,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {"products", "productDetails"}, allEntries = true)
     public void deleteProduct(Long id) {
 
         Product product = getProduct(id);
@@ -120,32 +116,22 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> searchProducts(String keyword) {
-
-        return productRepository.findByNameContainingIgnoreCase(keyword)
-                .stream()
-                .map(productMapper::toResponse)
-                .toList();
+    @Cacheable(cacheNames = "products", key = "'page-v2:search:' + #keyword + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
+    public PagedResponse<ProductResponse> searchProducts(String keyword, Pageable pageable) {
+        return PagedResponse.from(productRepository.findByNameContainingIgnoreCase(keyword, pageable)
+                .map(productMapper::toResponse));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductResponse> filterProducts(
+    @Cacheable(cacheNames = "products", key = "'page-v2:filter:' + #keyword + ':' + #category + ':' + #brand + ':' + #minPrice + ':' + #maxPrice + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
+    public PagedResponse<ProductResponse> filterProducts(
             String keyword,
             String category,
             String brand,
             BigDecimal minPrice,
             BigDecimal maxPrice,
-            int page,
-            int size,
-            String sortBy,
-            String direction) {
-
-        Sort sort = direction.equalsIgnoreCase("desc")
-                ? Sort.by(sortBy).descending()
-                : Sort.by(sortBy).ascending();
-
-        Pageable pageable = PageRequest.of(page, size, sort);
+            Pageable pageable) {
 
         Specification<Product> specification =
                 ProductSpecification.hasKeyword(keyword)
@@ -154,8 +140,8 @@ public class ProductServiceImpl implements ProductService {
                         .and(ProductSpecification.hasMinPrice(minPrice))
                         .and(ProductSpecification.hasMaxPrice(maxPrice));
 
-        return productRepository.findAll(specification, pageable)
-                .map(productMapper::toResponse);
+        return PagedResponse.from(productRepository.findAll(specification, pageable)
+                .map(productMapper::toResponse));
     }
 
     private Product getProduct(Long id) {

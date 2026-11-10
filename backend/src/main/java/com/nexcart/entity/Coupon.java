@@ -1,6 +1,7 @@
 package com.nexcart.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@BatchSize(size = 50)
 public class Coupon extends BaseEntity {
 
     @Column(nullable = false, unique = true, length = 50)

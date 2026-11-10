@@ -4,18 +4,19 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import com.nexcart.dto.request.ProductRequest;
 import com.nexcart.dto.response.ApiResponse;
 import com.nexcart.dto.response.ProductResponse;
+import com.nexcart.dto.response.PagedResponse;
 import com.nexcart.service.ProductService;
+import com.nexcart.util.PageableFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.data.domain.Page;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Set;
 @Tag(
         name = "Product Management",
         description = "APIs for managing products"
@@ -43,26 +44,22 @@ public class ProductController {
     }
     @Operation(summary = "Get all products with pagination and sorting")
     @GetMapping
-    public ResponseEntity<ApiResponse<Page<ProductResponse>>> getAllProducts(
+    public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> getAllProducts(
 
             @RequestParam(defaultValue = "0") int page,
 
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "20") int size,
 
             @RequestParam(defaultValue = "id") String sortBy,
 
             @RequestParam(defaultValue = "asc") String direction) {
 
-        Page<ProductResponse> response =
-                productService.getAllProducts(
-                        page,
-                        size,
-                        sortBy,
-                        direction
-                );
+        Pageable pageable = PageableFactory.create(page, size, sortBy, direction,
+                Set.of("id", "name", "price", "stock", "sku"));
+        PagedResponse<ProductResponse> response = productService.getAllProducts(pageable);
 
         return ResponseEntity.ok(
-                ApiResponse.<Page<ProductResponse>>builder()
+                ApiResponse.<PagedResponse<ProductResponse>>builder()
                         .success(true)
                         .message("Products fetched successfully")
                         .data(response)
@@ -118,14 +115,19 @@ public class ProductController {
     }
     @Operation(summary = "Search products by name")
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<List<ProductResponse>>> searchProducts(
-            @RequestParam String keyword) {
+    public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> searchProducts(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "name") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction) {
 
-        List<ProductResponse> response =
-                productService.searchProducts(keyword);
+        Pageable pageable = PageableFactory.create(page, size, sortBy, direction,
+                Set.of("id", "name", "price", "stock", "sku"));
+        PagedResponse<ProductResponse> response = productService.searchProducts(keyword, pageable);
 
         return ResponseEntity.ok(
-                ApiResponse.<List<ProductResponse>>builder()
+                ApiResponse.<PagedResponse<ProductResponse>>builder()
                         .success(true)
                         .message("Products fetched successfully")
                         .data(response)
@@ -135,7 +137,7 @@ public class ProductController {
     }
     @Operation(summary = "Filter products")
     @GetMapping("/filter")
-    public ResponseEntity<ApiResponse<Page<ProductResponse>>> filterProducts(
+    public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> filterProducts(
 
             @RequestParam(required = false) String keyword,
 
@@ -149,27 +151,24 @@ public class ProductController {
 
             @RequestParam(defaultValue = "0") int page,
 
-            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "20") int size,
 
             @RequestParam(defaultValue = "id") String sortBy,
 
             @RequestParam(defaultValue = "asc") String direction) {
 
-        Page<ProductResponse> response =
-                productService.filterProducts(
+        Pageable pageable = PageableFactory.create(page, size, sortBy, direction,
+                Set.of("id", "name", "price", "stock", "sku"));
+        PagedResponse<ProductResponse> response = productService.filterProducts(
                         keyword,
                         category,
                         brand,
                         minPrice,
                         maxPrice,
-                        page,
-                        size,
-                        sortBy,
-                        direction
-                );
+                        pageable);
 
         return ResponseEntity.ok(
-                ApiResponse.<Page<ProductResponse>>builder()
+                ApiResponse.<PagedResponse<ProductResponse>>builder()
                         .success(true)
                         .message("Products fetched successfully")
                         .data(response)

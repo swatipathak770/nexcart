@@ -9,18 +9,27 @@ function StoreHeader() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get("keyword") || "");
-  const [recoveryOrders, setRecoveryOrders] = useState([]);
+  const [recoveryNotifications, setRecoveryNotifications] = useState({ owner: null, orders: [] });
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const recoveryOrders = isAuthenticated && user?.role !== "ADMIN" && recoveryNotifications.owner === user?.id
+    ? recoveryNotifications.orders
+    : [];
   useEffect(() => {
-    if (!isAuthenticated || user?.role === "ADMIN") { setRecoveryOrders([]); return; }
+    if (!isAuthenticated || user?.role === "ADMIN") return undefined;
     let mounted = true;
-    const loadRecoveryNotifications = () => getOrders().then(orders => {
-      if (mounted) setRecoveryOrders(orders.filter(order => order.status !== "CANCELLED" && order.recoveryPaymentLink));
-    }).catch(() => { if (mounted) setRecoveryOrders([]); });
+    const loadRecoveryNotifications = () => getOrders({ size: 100 }).then(orderPage => {
+      const orders = orderPage?.content || [];
+      if (mounted) setRecoveryNotifications({
+        owner: user?.id,
+        orders: orders.filter(order => order.status !== "CANCELLED" && order.recoveryPaymentLink),
+      });
+    }).catch(() => {
+      if (mounted) setRecoveryNotifications({ owner: user?.id, orders: [] });
+    });
     loadRecoveryNotifications();
     const interval = setInterval(loadRecoveryNotifications, 30000);
     return () => { mounted = false; clearInterval(interval); };
-  }, [isAuthenticated, user?.role]);
+  }, [isAuthenticated, user?.id, user?.role]);
   const signOut = () => { logout(); navigate("/", { replace: true }); };
 
   const search = (event) => { event.preventDefault(); navigate(`/products${query.trim() ? `?keyword=${encodeURIComponent(query.trim())}` : ""}`); };

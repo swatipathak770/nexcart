@@ -2,6 +2,7 @@ package com.nexcart.service.impl;
 
 import com.nexcart.dto.request.CategoryRequest;
 import com.nexcart.dto.response.CategoryResponse;
+import com.nexcart.dto.response.PagedResponse;
 import com.nexcart.entity.Category;
 import com.nexcart.exception.CategoryAlreadyExistsException;
 import com.nexcart.exception.CategoryNotFoundException;
@@ -9,9 +10,11 @@ import com.nexcart.mapper.CategoryMapper;
 import com.nexcart.repository.CategoryRepository;
 import com.nexcart.service.CategoryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +24,7 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryMapper categoryMapper;
 
     @Override
+    @CacheEvict(cacheNames = "categories", allEntries = true)
     public CategoryResponse createCategory(CategoryRequest request) {
 
         if (categoryRepository.existsByName(request.getName())) {
@@ -36,12 +40,9 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
-    public List<CategoryResponse> getAllCategories() {
-
-        return categoryRepository.findAll()
-                .stream()
-                .map(categoryMapper::toResponse)
-                .toList();
+    @Cacheable(cacheNames = "categories", key = "'page-v2:' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
+    public PagedResponse<CategoryResponse> getAllCategories(Pageable pageable) {
+        return PagedResponse.from(categoryRepository.findAll(pageable).map(categoryMapper::toResponse));
     }
 
     @Override
@@ -55,6 +56,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @CacheEvict(cacheNames = "categories", allEntries = true)
     public CategoryResponse updateCategory(Long id,
                                            CategoryRequest request) {
 
@@ -72,6 +74,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @CacheEvict(cacheNames = "categories", allEntries = true)
     public void deleteCategory(Long id) {
 
         if (!categoryRepository.existsById(id)) {

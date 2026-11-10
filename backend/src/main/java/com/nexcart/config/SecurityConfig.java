@@ -1,7 +1,10 @@
 package com.nexcart.config;
 
 import com.nexcart.security.JwtAuthenticationFilter;
-import lombok.RequiredArgsConstructor;
+import com.nexcart.security.CustomUserDetailsService;
+import com.nexcart.security.JwtService;
+import com.nexcart.security.ApiRateLimitFilter;
+import com.nexcart.security.RequestIdFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,13 +23,17 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.Arrays;
 
 @Configuration
 @EnableMethodSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(
+            JwtService jwtService, CustomUserDetailsService userDetailsService) {
+        return new JwtAuthenticationFilter(jwtService, userDetailsService);
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -42,7 +49,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   JwtAuthenticationFilter jwtAuthenticationFilter)
             throws Exception {
 
         http
@@ -78,6 +86,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/webhooks/**",
+                                "/actuator/health",
+                                "/actuator/health/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
@@ -213,7 +223,9 @@ public class SecurityConfig {
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
-                );
+                )
+                .addFilterBefore(new RequestIdFilter(), JwtAuthenticationFilter.class)
+                .addFilterAfter(new ApiRateLimitFilter(), JwtAuthenticationFilter.class);
 
         return http.build();
     }
@@ -228,9 +240,9 @@ public class SecurityConfig {
         CorsConfiguration configuration =
                 new CorsConfiguration();
 
-        configuration.setAllowedOrigins(
-                List.of("http://localhost:5173")
-        );
+        configuration.setAllowedOrigins(Arrays.stream(
+                System.getenv().getOrDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+        ).map(String::trim).filter(origin -> !origin.isEmpty()).toList());
 
         configuration.setAllowedMethods(
                 List.of(

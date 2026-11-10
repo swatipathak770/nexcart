@@ -14,11 +14,12 @@ import com.nexcart.repository.ReviewRepository;
 import com.nexcart.repository.UserRepository;
 import com.nexcart.service.ReviewService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -68,16 +69,13 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ReviewResponse> getReviewsByProduct(Long productId) {
+    public Page<ReviewResponse> getReviewsByProduct(Long productId, Pageable pageable) {
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() ->
                         new ProductNotFoundException("Product not found with ID: " + productId));
 
-        return reviewRepository.findByProduct(product)
-                .stream()
-                .map(reviewMapper::toResponse)
-                .toList();
+        return reviewRepository.findByProduct(product, pageable).map(reviewMapper::toResponse);
     }
 
     @Override

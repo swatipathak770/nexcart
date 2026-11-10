@@ -1,7 +1,9 @@
 import api from "../services/api";
 
-export async function getBrands() {
-  const response = await api.get("/api/brands");
+export async function getBrands(params = {}) {
+  const response = await api.get("/api/brands", {
+    params: { page: 0, size: 20, sortBy: "name", direction: "asc", ...params },
+  });
   return response.data.data;
 }
 

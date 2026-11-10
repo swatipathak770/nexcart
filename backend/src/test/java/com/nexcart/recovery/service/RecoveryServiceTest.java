@@ -71,6 +71,68 @@ class RecoveryServiceTest {
     }
 
     @org.junit.jupiter.api.Test
+    void completedEquivalentRetryIsNotExecutedAgain() {
+        RecoveryCase recoveryCase = RecoveryCase.builder()
+                .status(RecoveryStatus.ACTION_RECOMMENDED)
+                .recommendedAction(RecoveryActionType.RETRY_PAYMENT)
+                .build();
+        RecoveryAction completedRetry = RecoveryAction.builder()
+                .recoveryCase(recoveryCase)
+                .action(RecoveryActionType.RETRY_PAYMENT)
+                .successful(true)
+                .build();
+        when(cases.findByIdForUpdate(1L)).thenReturn(Optional.of(recoveryCase));
+        when(actions.findByRecoveryCaseIdOrderByCreatedAtAsc(null)).thenReturn(List.of(completedRetry));
+        when(cases.save(recoveryCase)).thenReturn(recoveryCase);
+
+        service.execute(1L);
+
+        verify(actions, never()).save(any());
+        verifyNoInteractions(razorpay);
+    }
+
+    @org.junit.jupiter.api.Test
+    void maximumAttemptsForceNoAction() {
+        RecoveryCase recoveryCase = RecoveryCase.builder()
+                .status(RecoveryStatus.ACTION_RECOMMENDED)
+                .recommendedAction(RecoveryActionType.CREATE_PAYMENT_LINK)
+                .actionAttempts(3)
+                .build();
+        when(cases.findByIdForUpdate(1L)).thenReturn(Optional.of(recoveryCase));
+        when(cases.save(recoveryCase)).thenReturn(recoveryCase);
+
+        service.execute(1L);
+
+        assertEquals(RecoveryStatus.NO_ACTION, recoveryCase.getStatus());
+        assertEquals("REJECTED: no safe recovery action available", recoveryCase.getGuardrailResult());
+        verifyNoInteractions(actions, razorpay);
+    }
+
+    @org.junit.jupiter.api.Test
+    void customerCancelledOrderStopsRecoveryBeforeDecisionOrAction() {
+        com.nexcart.entity.Order order = com.nexcart.entity.Order.builder()
+                .status(com.nexcart.entity.OrderStatus.CANCELLED)
+                .build();
+        RecoveryCase recoveryCase = RecoveryCase.builder()
+                .order(order)
+                .status(RecoveryStatus.DETECTED)
+                .recommendedAction(RecoveryActionType.RETRY_PAYMENT)
+                .build();
+        when(cases.findByIdForUpdate(1L)).thenReturn(Optional.of(recoveryCase));
+        when(orders.findById(null)).thenReturn(Optional.of(order));
+        when(actions.findByRecoveryCaseIdOrderByCreatedAtAsc(null)).thenReturn(List.of());
+        when(cases.save(recoveryCase)).thenReturn(recoveryCase);
+
+        service.analyze(1L);
+
+        assertEquals(RecoveryStatus.CUSTOMER_CANCELLED, recoveryCase.getStatus());
+        assertEquals(RecoveryActionType.NO_ACTION, recoveryCase.getRecommendedAction());
+        verifyNoInteractions(decisions, razorpay);
+        verify(actions).findByRecoveryCaseIdOrderByCreatedAtAsc(null);
+        verify(actions, never()).save(any());
+    }
+
+    @org.junit.jupiter.api.Test
     void simulatedPaymentLinkRecoversWithoutCallingRazorpay() {
         RecoveryCase recoveryCase = RecoveryCase.builder()
                 .amount(new BigDecimal("4999.00"))

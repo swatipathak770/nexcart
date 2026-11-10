@@ -47,6 +47,10 @@ public class CartServiceImpl implements CartService {
     @Transactional
     public CartResponse addToCart(CartRequest request) {
 
+        if (request == null || request.getQuantity() == null || request.getQuantity() < 1) {
+            throw new IllegalArgumentException("Quantity must be at least 1.");
+        }
+
         User user = getCurrentUser();
 
         Product product = productRepository.findById(request.getProductId())
@@ -56,6 +60,11 @@ public class CartServiceImpl implements CartService {
         Cart cart = cartRepository
                 .findByUserAndProduct(user, product)
                 .orElse(null);
+
+        long requestedQuantity = (cart == null ? 0L : cart.getQuantity()) + request.getQuantity();
+        if (requestedQuantity > product.getStock()) {
+            throw new IllegalArgumentException("Requested quantity exceeds available stock.");
+        }
 
         if (cart != null) {
 
@@ -95,6 +104,10 @@ public class CartServiceImpl implements CartService {
     @Override
     public CartResponse updateQuantity(Long cartId, Integer quantity) {
 
+        if (quantity == null || quantity < 1) {
+            throw new IllegalArgumentException("Quantity must be at least 1.");
+        }
+
         User user = getCurrentUser();
 
         Cart cart = cartRepository.findById(cartId)
@@ -103,6 +116,10 @@ public class CartServiceImpl implements CartService {
 
         if (!cart.getUser().getId().equals(user.getId())) {
             throw new RuntimeException("You are not authorized.");
+        }
+
+        if (quantity > cart.getProduct().getStock()) {
+            throw new IllegalArgumentException("Requested quantity exceeds available stock.");
         }
 
         cart.setQuantity(quantity);

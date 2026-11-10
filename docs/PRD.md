@@ -65,6 +65,10 @@ This document describes only features implemented in the repository.
 - REAL recovery cases use Razorpay test-mode payment links and resolve through signed webhook events.
 - SIMULATED cases use isolated demo links and outcomes; they never call Razorpay and do not contribute to real recovered revenue.
 
+### RecoverAI technical boundary
+
+Gemini is the primary recovery decision provider when configured. It receives safe structured recovery context and returns a bounded recommendation; it does not execute payments or access MySQL, database writes, Razorpay credentials, order state, authentication, or authorization. The backend validates Gemini output and applies guardrails before execution. If Gemini is unavailable, errors, times out, or returns invalid data, the deterministic fallback decision provider is used and recorded as `DETERMINISTIC_FALLBACK`.
+
 ## 4. Primary User Flows
 
 ### Customer purchase

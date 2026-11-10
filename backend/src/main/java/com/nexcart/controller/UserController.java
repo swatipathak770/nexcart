@@ -4,7 +4,9 @@ import com.nexcart.dto.request.ChangePasswordRequest;
 import com.nexcart.dto.request.UpdateProfileRequest;
 import com.nexcart.dto.response.ApiResponse;
 import com.nexcart.dto.response.UserResponse;
+import com.nexcart.dto.response.PagedResponse;
 import com.nexcart.service.UserService;
+import com.nexcart.util.PageableFactory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,9 +15,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/user")
@@ -79,13 +83,20 @@ public class UserController {
     @Operation(summary = "Get all users")
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/users")
-    public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
+    public ResponseEntity<ApiResponse<PagedResponse<UserResponse>>> getAllUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction) {
+
+        Pageable pageable = PageableFactory.create(page, size, sortBy, direction,
+                Set.of("id", "fullName", "email", "createdAt"));
 
         return ResponseEntity.ok(
-                ApiResponse.<List<UserResponse>>builder()
+                ApiResponse.<PagedResponse<UserResponse>>builder()
                         .success(true)
                         .message("Users fetched successfully")
-                        .data(userService.getAllUsers())
+                        .data(PagedResponse.from(userService.getAllUsers(pageable)))
                         .timestamp(LocalDateTime.now())
                         .build()
         );

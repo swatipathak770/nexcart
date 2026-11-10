@@ -18,6 +18,7 @@ import com.nexcart.recovery.service.RecoveryService;
 import com.razorpay.RazorpayClient;
 import com.razorpay.Utils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,6 +32,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
@@ -63,10 +65,13 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setRazorpaySignature(null);
         payment.setFailureReason(null);
         payment.setPaidAt(null);
-        return PaymentMapper.toResponse(paymentRepository.save(payment));
+        Payment initiated = paymentRepository.save(payment);
+        log.info("Payment order initiated for orderId={}", order.getId());
+        return PaymentMapper.toResponse(initiated);
     }
 
     @Override
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public PaymentResponse verifyPayment(PaymentVerificationRequest request) throws Exception {
         Order order = findOwnedOrder(request.getOrderId());
         Payment payment = paymentRepository.findByOrderId(order.getId()).orElseThrow(() -> new ResourceNotFoundException("Payment was not initiated for this order."));
@@ -83,6 +88,7 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setFailureReason("Razorpay signature verification failed.");
             Payment failed = paymentRepository.save(payment);
             recoveryService.detectFailedPayment(failed);
+            log.warn("Payment signature verification failed for orderId={}", order.getId());
             throw new IllegalArgumentException("Payment verification failed.");
         }
 
@@ -95,6 +101,7 @@ public class PaymentServiceImpl implements PaymentService {
         orderRepository.save(order);
         Payment saved = paymentRepository.save(payment);
         recoveryService.markRecovered(saved);
+        log.info("Payment verified for orderId={}", order.getId());
         return PaymentMapper.toResponse(saved);
     }
 

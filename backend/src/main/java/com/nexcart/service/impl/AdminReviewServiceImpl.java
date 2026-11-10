@@ -7,10 +7,11 @@ import com.nexcart.mapper.ReviewMapper;
 import com.nexcart.repository.ReviewRepository;
 import com.nexcart.service.AdminReviewService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -21,12 +22,8 @@ public class AdminReviewServiceImpl implements AdminReviewService {
     private final ReviewMapper reviewMapper;
 
     @Override
-    public List<ReviewResponse> getAllReviews() {
-
-        return reviewRepository.findAll()
-                .stream()
-                .map(reviewMapper::toResponse)
-                .toList();
+    public Page<ReviewResponse> getAllReviews(Pageable pageable) {
+        return reviewRepository.findAll(pageable).map(reviewMapper::toResponse);
     }
 
     @Override

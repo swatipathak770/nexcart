@@ -14,8 +14,6 @@ import Orders from "../pages/customer/Orders";
 import OrderDetails from "../pages/customer/OrderDetails";
 import Checkout from "../pages/customer/Checkout";
 import Coupons from "../pages/customer/Coupons";
-import Dashboard from "../pages/admin/Dashboard";
-import Recovery from "../pages/admin/Recovery";
 import AdminWorkspace from "../pages/admin/AdminWorkspace";
 import AdminRoute from "./AdminRoute";
 import ProtectedRoute from "./ProtectedRoute";

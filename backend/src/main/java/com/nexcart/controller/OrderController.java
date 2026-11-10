@@ -1,7 +1,9 @@
 package com.nexcart.controller;
 
 import com.nexcart.dto.response.OrderResponse;
+import com.nexcart.dto.response.PagedResponse;
 import com.nexcart.service.OrderService;
+import com.nexcart.util.PageableFactory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -9,8 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Pageable;
 
-import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -32,9 +35,15 @@ public class OrderController {
 
     @GetMapping
     @Operation(summary = "Get My Orders")
-    public ResponseEntity<List<OrderResponse>> getMyOrders() {
+    public ResponseEntity<PagedResponse<OrderResponse>> getMyOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "desc") String direction) {
 
-        return ResponseEntity.ok(orderService.getMyOrders());
+        Pageable pageable = PageableFactory.create(page, size, sortBy, direction,
+                Set.of("id", "createdAt", "totalAmount", "finalAmount", "status"));
+        return ResponseEntity.ok(PagedResponse.from(orderService.getMyOrders(pageable)));
     }
 
     @GetMapping("/{orderId}")
