@@ -11,9 +11,7 @@
   <a href="https://github.com/swatipathak770/nexcart/actions/workflows/ci.yml"><img alt="GitHub Actions CI status" src="https://github.com/swatipathak770/nexcart/actions/workflows/ci.yml/badge.svg?branch=main"></a>
 </p>
 
-NexCart is a full-stack electronics commerce project built with React and Spring Boot. It demonstrates a complete customer checkout path and a RecoverAI workflow that turns payment failures into reviewable, bounded recovery actions.
-
-> **Project status:** Portfolio project with Razorpay Test Mode integration. No live deployment or production readiness is claimed. CI builds and verifies the project; it does not publish images or deploy services.
+I built NexCart as a full-stack electronics commerce application with React and Spring Boot. It includes a customer checkout flow and RecoverAI, a guarded workflow for responding to failed payments.
 
 ## Contents
 
@@ -30,7 +28,6 @@ NexCart is a full-stack electronics commerce project built with React and Spring
 - [Run the applications](#run-the-applications)
 - [Testing and CI](#testing-and-ci)
 - [Docker Compose](#docker-compose)
-- [Planned deployment](#planned-deployment)
 - [Future improvements](#future-improvements)
 - [Author](#author)
 
@@ -164,8 +161,6 @@ flowchart LR
     Services -. if Gemini is unavailable .-> Fallback
 ```
 
-Vercel for the SPA and Render for the backend are **planned hosting targets**, not deployed components.
-
 ### Checkout sequence
 
 ```mermaid
@@ -222,7 +217,7 @@ sequenceDiagram
 
 ## Screenshots
 
-These owner-provided captures show the local NexCart interface. The checkout delivery address and admin account name have been redacted. The RecoverAI dashboard is a local UI capture; its displayed values are not evidence of live payment transactions. No payment-link detail is included.
+The screenshots below show the NexCart storefront, checkout, admin catalog, and RecoverAI dashboard. I redacted the checkout address and admin account name. RecoverAI values shown here are local dashboard data, not live payment transactions.
 
 ### Storefront and shopping
 
@@ -516,18 +511,6 @@ The frontend is exposed on the configured `FRONTEND_PORT` (default `3000`); the 
 
 Useful commands: `docker compose logs -f`, `docker compose logs -f backend`, and `docker compose down`. `docker compose down` stops containers but does not remove the named Redis volume.
 
-## Planned deployment
-
-The proposed portfolio topology is:
-
-- **Frontend:** Vercel static Vite site.
-- **Backend:** Render web service using the backend Dockerfile.
-- **Database:** separately provisioned MySQL 8 on an Oracle Cloud VM.
-- **Payments:** Razorpay Test Mode.
-- **Cache:** initially omit Redis and use simple in-process caching, or configure Redis if needed.
-
-This is a plan only. No deployment URLs, cloud resources, provider connectivity, TLS, backups, or production readiness have been verified. Hosting tiers and free-tier availability can change; do not treat this topology as a guarantee of zero cost. Keep the database private, configure HTTPS/CORS/webhook secrets, and run reviewed migrations as a deliberate deployment step before deploying backend code that requires the schema.
-
 ## Future improvements
 
 - Add admin UI screens for the existing order, payment, user, address, and review APIs.
@@ -535,7 +518,7 @@ This is a plan only. No deployment URLs, cloud resources, provider connectivity,
 - Add a customer-facing payment-attempt timeline.
 - Add a real notification provider if recovery reminders are needed.
 - Provide a secure, documented local admin-account bootstrap flow.
-- Add deployment-specific verification after the target environments exist.
+- Add automated deployment smoke tests.
 
 ## Author
 
