@@ -5,3 +5,4 @@ export const verifyPayment = async (payment) => (await api.post("/api/payments/v
 export const getPaymentConfig = async () => (await api.get("/api/payments/config")).data;
 export const markPaymentFailed = async (orderId, reason) => (await api.post("/api/payments/failed", { orderId, reason })).data;
 export const cancelPayment = async (orderId, reason) => (await api.post("/api/payments/cancelled", { orderId, reason })).data;
+export const getRetryCheckout = async (orderId) => (await api.post(`/api/payments/order/${orderId}/retry-checkout`)).data;

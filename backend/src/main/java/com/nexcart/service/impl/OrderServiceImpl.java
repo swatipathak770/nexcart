@@ -8,6 +8,10 @@ import com.nexcart.repository.CartRepository;
 import com.nexcart.repository.OrderRepository;
 import com.nexcart.repository.ProductRepository;
 import com.nexcart.repository.UserRepository;
+import com.nexcart.repository.PaymentRepository;
+import com.nexcart.repository.PaymentAttemptRepository;
+import com.nexcart.repository.CheckoutIdempotencyKeyRepository;
+import com.nexcart.repository.AddressRepository;
 import com.nexcart.service.CouponService;
 import com.nexcart.service.OrderService;
 import com.nexcart.recovery.service.RecoveryService;
@@ -16,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.cache.annotation.CacheEvict;
 
@@ -38,6 +43,10 @@ public class OrderServiceImpl implements OrderService {
     private final OrderMapper orderMapper;
     private final CouponService couponService;
     private final RecoveryService recoveryService;
+    private final PaymentRepository paymentRepository;
+    private final PaymentAttemptRepository paymentAttemptRepository;
+    private final CheckoutIdempotencyKeyRepository checkoutIdempotencyKeys;
+    private final AddressRepository addressRepository;
 
     private User getCurrentUser() {
 
@@ -53,9 +62,49 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     @CacheEvict(cacheNames = {"products", "productDetails"}, allEntries = true)
-    public OrderResponse placeOrder(String couponCode) {
+    public OrderResponse placeOrder(String couponCode, String idempotencyKey) {
+        return placeOrder(couponCode, idempotencyKey, null);
+    }
 
-        User user = getCurrentUser();
+    @Override
+    @Transactional
+    @CacheEvict(cacheNames = {"products", "productDetails"}, allEntries = true)
+    public OrderResponse placeOrder(String couponCode, String idempotencyKey, Long addressId) {
+
+        User authenticatedUser = getCurrentUser();
+        User user = userRepository.findByIdForUpdate(authenticatedUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        CheckoutIdempotencyKey priorRequest = checkoutIdempotencyKeys
+                .findByUserAndKeyForUpdate(user.getId(), idempotencyKey)
+                .orElse(null);
+        if (priorRequest != null) {
+            if (priorRequest.getOrder() == null) {
+                throw new IllegalStateException("The checkout request is still being processed. Retry with the same idempotency key.");
+            }
+            return orderMapper.toResponse(priorRequest.getOrder());
+        }
+
+        OrderDeliveryAddress deliveryAddress = null;
+        if (addressId != null) {
+            Address address = addressRepository.findByIdAndUser(addressId, user)
+                    .orElseThrow(() -> new ResourceNotFoundException("Delivery address not found."));
+            deliveryAddress = OrderDeliveryAddress.builder()
+                    .fullName(address.getFullName())
+                    .phoneNumber(address.getPhoneNumber())
+                    .addressLine1(address.getAddressLine1())
+                    .addressLine2(address.getAddressLine2())
+                    .city(address.getCity())
+                    .state(address.getState())
+                    .country(address.getCountry())
+                    .postalCode(address.getPostalCode())
+                    .build();
+        }
+
+        CheckoutIdempotencyKey request = new CheckoutIdempotencyKey();
+        request.setUser(user);
+        request.setIdempotencyKey(idempotencyKey);
+        checkoutIdempotencyKeys.saveAndFlush(request);
 
         // Keep product rows as proxies until findByIdForUpdate acquires the lock;
         // preloading product state with the cart can leave a stale stock value
@@ -132,6 +181,7 @@ public class OrderServiceImpl implements OrderService {
                 .discountAmount(discount)
                 .finalAmount(finalAmount)
                 .coupon(appliedCoupon)
+                .deliveryAddress(deliveryAddress)
                 .build();
 
         // Create order items and reduce stock
@@ -153,6 +203,8 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Order savedOrder = orderRepository.save(order);
+        request.setOrder(savedOrder);
+        checkoutIdempotencyKeys.save(request);
 
         if (appliedCoupon != null) {
             couponService.recordUsage(appliedCoupon, user, savedOrder);
@@ -194,16 +246,23 @@ public class OrderServiceImpl implements OrderService {
 
         User user = getCurrentUser();
 
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Order not found"));
 
         if (!order.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("You are not authorized to cancel this order.");
+            throw new AccessDeniedException("You are not authorized to cancel this order.");
         }
 
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            throw new RuntimeException("Order is already cancelled.");
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException(order.getStatus() == OrderStatus.CANCELLED
+                    ? "Order is already cancelled."
+                    : "Only pending orders can be cancelled.");
+        }
+
+        Payment payment = paymentRepository.findByOrderIdForUpdate(orderId).orElse(null);
+        if (payment != null && payment.getPaymentStatus() == PaymentStatus.SUCCESS) {
+            throw new IllegalStateException("A successfully paid order cannot be cancelled through this flow.");
         }
 
         List<OrderItem> orderItems = order.getOrderItems().stream()
@@ -221,6 +280,18 @@ public class OrderServiceImpl implements OrderService {
 
         order.setStatus(OrderStatus.CANCELLED);
 
+        if (payment != null && payment.getPaymentStatus() == PaymentStatus.PENDING) {
+            payment.setPaymentStatus(PaymentStatus.CANCELLED);
+            payment.setFailureReason("Order cancelled by customer.");
+            paymentAttemptRepository.findByPaymentIdAndStatusForUpdate(payment.getId(), PaymentStatus.PENDING)
+                    .forEach(attempt -> {
+                        attempt.setStatus(PaymentStatus.CANCELLED);
+                        attempt.setFailureReason("Order cancelled by customer.");
+                        paymentAttemptRepository.save(attempt);
+                    });
+            paymentRepository.save(payment);
+        }
+
         orderRepository.save(order);
         recoveryService.cancelForOrder(order, "Customer cancelled this order.");
     }
@@ -230,6 +301,7 @@ public class OrderServiceImpl implements OrderService {
         Order currentOrder = orderRepository.findById(order.getId()).orElse(order);
         OrderResponse response = orderMapper.toResponse(currentOrder);
         recoveryService.activePaymentLinkFor(currentOrder).ifPresent(response::setRecoveryPaymentLink);
+        response.setRetryAvailable(recoveryService.retryCheckoutAvailable(currentOrder));
         return response;
     }
 }

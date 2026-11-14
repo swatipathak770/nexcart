@@ -1,7 +1,9 @@
 package com.nexcart.mapper;
 
 import com.nexcart.dto.response.OrderItemResponse;
+import com.nexcart.dto.response.OrderDeliveryAddressResponse;
 import com.nexcart.dto.response.OrderResponse;
+import com.nexcart.entity.OrderDeliveryAddress;
 import com.nexcart.entity.Order;
 import com.nexcart.entity.OrderItem;
 import org.springframework.stereotype.Component;
@@ -30,6 +32,21 @@ public class OrderMapper {
                 .status(order.getStatus())
                 .createdAt(order.getCreatedAt())
                 .items(items)
+                .deliveryAddress(toDeliveryAddressResponse(order.getDeliveryAddress()))
+                .build();
+    }
+
+    private OrderDeliveryAddressResponse toDeliveryAddressResponse(OrderDeliveryAddress address) {
+        if (address == null) return null;
+        return OrderDeliveryAddressResponse.builder()
+                .fullName(address.getFullName())
+                .phoneNumber(address.getPhoneNumber())
+                .addressLine1(address.getAddressLine1())
+                .addressLine2(address.getAddressLine2())
+                .city(address.getCity())
+                .state(address.getState())
+                .country(address.getCountry())
+                .postalCode(address.getPostalCode())
                 .build();
     }
 

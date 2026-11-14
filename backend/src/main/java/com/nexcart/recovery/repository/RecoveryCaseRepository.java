@@ -11,6 +11,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.*;
 public interface RecoveryCaseRepository extends JpaRepository<RecoveryCase,Long> {
+ @Query("select c.order.id from RecoveryCase c where c.id = :id")
+ Optional<Long> findOrderIdById(@Param("id") Long id);
  @Query("""
      select coalesce(sum(case when c.status <> :recovered and c.status <> :cancelled then c.amount else 0 end), 0) as revenueAtRisk,
             coalesce(sum(case when c.status = :recovered then coalesce(c.recoveredAmount, 0) else 0 end), 0) as revenueRecovered,

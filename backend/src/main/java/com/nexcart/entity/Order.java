@@ -40,6 +40,9 @@ public class Order extends BaseEntity {
     @Column(nullable = false)
     private OrderStatus status;
 
+    @Embedded
+    private OrderDeliveryAddress deliveryAddress;
+
     @OneToMany(
             mappedBy = "order",
             cascade = CascadeType.ALL,

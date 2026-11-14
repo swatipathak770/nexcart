@@ -8,7 +8,9 @@ import java.util.List;
 
 public interface OrderService {
 
-    OrderResponse placeOrder(String couponCode);
+    OrderResponse placeOrder(String couponCode, String idempotencyKey);
+
+    OrderResponse placeOrder(String couponCode, String idempotencyKey, Long addressId);
 
     Page<OrderResponse> getMyOrders(Pageable pageable);
 

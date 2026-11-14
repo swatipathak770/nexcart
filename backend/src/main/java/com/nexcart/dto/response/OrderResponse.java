@@ -31,4 +31,8 @@ public class OrderResponse {
     private List<OrderItemResponse> items;
 
     private String recoveryPaymentLink;
+
+    private boolean retryAvailable;
+
+    private OrderDeliveryAddressResponse deliveryAddress;
 }

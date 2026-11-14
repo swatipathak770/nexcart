@@ -22,8 +22,21 @@ export default function Checkout() {
     if (!await loadRazorpay()) { toast.error("Unable to load Razorpay checkout."); return; }
     setPlacing(true);
     try {
-      const order = await placeOrder(discount?.couponCode);
+      const storageKey = "nexcart.checkout.idempotency-key";
+      const fingerprint = JSON.stringify({
+        items: items.map((item) => [item.productId, item.quantity]).sort((a, b) => a[0] - b[0]),
+        coupon: discount?.couponCode || null,
+        addressId: selectedAddress,
+      });
+      let storedRequest;
+      try { storedRequest = JSON.parse(sessionStorage.getItem(storageKey) || "null"); } catch { storedRequest = null; }
+      const idempotencyKey = storedRequest?.fingerprint === fingerprint
+        ? storedRequest.key
+        : crypto.randomUUID();
+      sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, key: idempotencyKey }));
+      const order = await placeOrder(discount?.couponCode, idempotencyKey, selectedAddress);
       const [payment, config] = await Promise.all([createPaymentOrder(order.orderId), getPaymentConfig()]);
+      sessionStorage.removeItem(storageKey);
       let paymentCompleted = false;
       const razorpay = new window.Razorpay({ key: config.keyId, amount: Math.round(Number(payment.amount) * 100), currency: "INR", name: "NexCart", description: `Order #${order.orderId}`, order_id: payment.razorpayOrderId, method: { upi: true, card: true, netbanking: true, wallet: true }, handler: async (response) => { paymentCompleted = true; try { await verifyPayment({ orderId: order.orderId, razorpayPaymentId: response.razorpay_payment_id, razorpaySignature: response.razorpay_signature }); toast.success("Payment successful. Your order is confirmed."); navigate(`/orders/${order.orderId}`); } catch (error) { toast.error(error.response?.data?.message || "Payment could not be verified."); navigate(`/orders/${order.orderId}`); } finally { setPlacing(false); } }, modal: { ondismiss: async () => { if (!paymentCompleted) { try { await cancelPayment(order.orderId, "Razorpay Checkout was closed by the customer."); } catch { /* The order can still be viewed even if this notification cannot be sent. */ } } setPlacing(false); if (!paymentCompleted) toast("Payment cancelled. Your order is awaiting a new payment attempt."); } }, theme: { color: "#059669" } });
       razorpay.on("payment.failed", async (event) => { try { await markPaymentFailed(order.orderId, event.error?.description || "Razorpay Checkout reported a failed payment."); } catch { /* Preserve the Razorpay failure message for the customer. */ } setPlacing(false); toast.error("Payment failed. Please try again from your order."); }); razorpay.open();

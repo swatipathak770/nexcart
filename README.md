@@ -259,7 +259,7 @@ docker compose build
 docker compose up -d
 ```
 
-Compose waits for MySQL's health check before starting Spring Boot. MySQL stores its data in a named volume. Running `docker compose down` preserves the database. Do not run `docker compose down -v` unless you intend to delete the database volume.
+The Compose stack expects an existing MySQL instance at `host.docker.internal:3306`; it does not start or manage MySQL. Provision MySQL separately (managed service or an operator-managed container), keep it private, and take its backups independently. Compose includes Redis, whose data is stored in a named volume.
 
 The frontend is served by Nginx and proxies `/api/` requests to Spring Boot. The default `FRONTEND_API_BASE_URL=/` works without a browser-visible backend hostname.
 
@@ -292,9 +292,9 @@ docker compose down
 - MySQL remains the source of truth.
 - Redis is used for catalog caching and supports an optional password.
 - Backend startup does not depend on Redis availability; cache failures are logged and bypassed so catalog requests can continue against MySQL.
-- Flyway owns schema changes, and Hibernate validates mappings instead of altering tables.
-- `V1` creates a clean schema. Existing non-empty databases are baselined at version 1, and `V2` creates missing RecoverAI/webhook tables without removing existing rows.
-- Review the existing database schema before the first production rollout.
+- Flyway owns schema changes, and Hibernate validates mappings instead of altering tables. The application container has Flyway disabled; run the explicit migration job below before deploying a backend build that requires a newer schema.
+- `V1` creates a clean schema. `V2` adds RecoverAI/webhook tables; `V3` creates and backfills payment-attempt history; `V4` adds checkout idempotency keys; `V5` adds immutable delivery-address snapshots to orders.
+- Review the existing database schema and rehearse every migration on a restored copy before the first production rollout.
 
 Only health and info Actuator endpoints are exposed, with dependency details hidden.
 
@@ -419,20 +419,30 @@ The project includes automated backend tests using JUnit and Mockito, frontend l
 
 Recommended topology:
 
-- Serve the frontend container behind a TLS-enabled edge proxy.
-- Route `/api` to the Spring Boot container on a private network.
-- Use managed MySQL and Redis services that are not exposed to the public internet.
-- Keep the backend private except for the edge proxy and Razorpay webhook delivery.
+- Deploy `frontend/` as a Vercel Vite project (`npm run build`, output `dist`) and set `VITE_API_BASE_URL` to the HTTPS Render API origin.
+- Deploy `backend/` as a Render Docker web service. It binds to Render's `PORT` (8080 locally) and exposes `/actuator/health/readiness` for readiness checks.
+- Run MySQL 8 on an Oracle Cloud VM with durable storage and backups. Allow database ingress only from the Render service's regional outbound IP ranges, require TLS for MySQL connections, and never open port 3306 to all sources. Render's shared outbound ranges can change; dedicated static egress IPs are a paid feature.
+- Redis is optional. The backend defaults to simple in-process caching; set `SPRING_CACHE_TYPE=redis` only when a Redis service is configured.
 
 Before deployment:
 
 1. Build and publish backend and frontend images through the CI workflow.
-2. Provision managed MySQL and Redis.
-3. Provide database, JWT, Razorpay, Gemini, and Redis credentials through the deployment platform's secret manager.
-4. Set `CORS_ALLOWED_ORIGINS` to the exact frontend origin.
-5. Configure liveness and readiness probes using the Actuator endpoints.
-6. Configure the Razorpay webhook URL as `https://<api-host>/api/webhooks/razorpay`.
-7. Keep payment credentials in Test Mode until production credentials and webhook delivery have been explicitly verified.
+2. Provision MySQL 8 on the Oracle VM, secure the host firewall and MySQL TLS, and confirm Render can reach it through its regional outbound IP ranges.
+3. Set Render secrets/config: `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, a random `JWT_SECRET` (at least 32 characters), `RAZORPAY_MODE=TEST`, matching Razorpay test key ID/secret, a non-empty `RAZORPAY_WEBHOOK_SECRET`, and `CORS_ALLOWED_ORIGINS` set to the exact Vercel origin. Gemini and Redis are optional.
+4. Set Vercel's `VITE_API_BASE_URL` to the HTTPS Render API origin for Production and Preview as needed. Vite embeds this value at build time; do not place backend secrets in Vercel variables prefixed with `VITE_`.
+5. Back up the database and rehearse migrations on a restored copy. If V3's table already exists but V3 is missing from Flyway history, do not baseline over the existing V1/V2 history and do not rerun V3 SQL. Flyway 11.7.2's `skipExecutingMigrations` option can record the pending V3 migration without executing it:
+
+   ```text
+   # Set FLYWAY_URL, FLYWAY_USER, and FLYWAY_PASSWORD in the current shell/secret environment.
+   cd backend
+   ./mvnw -Pflyway-migrations -Dflyway.target=3 -Dflyway.skipExecutingMigrations=true flyway:migrate
+   ./mvnw -Pflyway-migrations flyway:info
+   ```
+
+   Confirm V1, V2, and V3 are successful and the existing `payment_attempts` row count is unchanged. Then run the normal migration command to apply all pending migrations (including V4 and V5), inspect `flyway:info`, and verify the schema and data before deploying the backend. On Windows, use `./mvnw.cmd` in place of `./mvnw`. Do not run the skip-execution command unless the V3 schema has been independently verified to match the migration.
+6. Set `SPRING_FLYWAY_ENABLED=false` on the Render web service. Run the reviewed Flyway migration command as a separate, deliberate deployment step before deploying a backend build that requires the new schema. Hibernate remains on `validate`.
+7. Configure the Razorpay webhook URL as `https://<api-host>/api/webhooks/razorpay` and set a non-empty matching webhook secret.
+8. Keep payment credentials in Test Mode. Render's free web service may spin down after 15 minutes idle and take about a minute to wake; this is acceptable for a portfolio demo but creates a cold-start delay. Keep MySQL on persistent OCI storage because the Render service filesystem is ephemeral.
 
 For an existing database, verify the live schema against the Flyway migrations before rollout. Back up the database before applying migrations. Do not use a schema reset as a migration strategy.
 
@@ -443,6 +453,7 @@ For an existing database, verify the live schema against the Flyway migrations b
 - Rate limits are per backend instance; use a shared gateway or distributed limiter before horizontal scaling.
 - Redis is an optimization and is not the source of truth.
 - Razorpay Test Mode does not demonstrate real-money production payment processing.
+- The target Render free backend has cold starts and no persistent filesystem; all durable application data must remain in MySQL.
 - Gemini decisioning requires a valid API key; deterministic fallback provides a recovery path when AI is unavailable.
 
 ## Security

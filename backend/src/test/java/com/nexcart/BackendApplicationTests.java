@@ -3,6 +3,7 @@ package com.nexcart;
 import com.nexcart.entity.*;
 import com.nexcart.repository.BrandRepository;
 import com.nexcart.repository.CartRepository;
+import com.nexcart.repository.CheckoutIdempotencyKeyRepository;
 import com.nexcart.repository.CategoryRepository;
 import com.nexcart.repository.OrderRepository;
 import com.nexcart.repository.ProductRepository;
@@ -20,6 +21,7 @@ import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -43,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
+@ActiveProfiles("test")
 class BackendApplicationTests {
 
     @Autowired
@@ -65,6 +68,9 @@ class BackendApplicationTests {
 
     @Autowired
     private CartRepository cartRepository;
+
+    @Autowired
+    private CheckoutIdempotencyKeyRepository checkoutIdempotencyKeyRepository;
 
     @Autowired
     private OrderService orderService;
@@ -212,6 +218,8 @@ class BackendApplicationTests {
                 User second = userRepository.findById(fixture.secondUserId()).orElse(null);
                 if (first != null) cartRepository.deleteByUser(first);
                 if (second != null) cartRepository.deleteByUser(second);
+                checkoutIdempotencyKeyRepository.deleteByUserIds(
+                        List.of(fixture.firstUserId(), fixture.secondUserId()));
                 if (first != null) orderRepository.findByUser(first, PageRequest.of(0, 10))
                         .forEach(orderRepository::delete);
                 if (second != null) orderRepository.findByUser(second, PageRequest.of(0, 10))
@@ -309,7 +317,7 @@ class BackendApplicationTests {
         ready.countDown();
         try {
             if (!start.await(10, TimeUnit.SECONDS)) return false;
-            orderService.placeOrder(null);
+            orderService.placeOrder(null, UUID.randomUUID().toString());
             return true;
         } catch (RuntimeException exception) {
             return false;

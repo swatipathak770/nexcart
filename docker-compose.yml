@@ -1,20 +1,23 @@
 services:
-  mysql:
-    image: mysql:8.4
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: ${DB_NAME:?Set DB_NAME in .env}
-      MYSQL_USER: ${DB_USERNAME:?Set DB_USERNAME in .env}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+  # Preserved for later reconciliation; not used by the NexCart application.
+  # mysql:
+  #   image: mysql:8.4
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:3308:3306"
+  #   environment:
+  #     MYSQL_DATABASE: ${DB_NAME:?Set DB_NAME in .env}
+  #     MYSQL_USER: ${DB_USERNAME:?Set DB_USERNAME in .env}
+  #     MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+  #     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 30s
 
   backend:
     build:
@@ -22,9 +25,12 @@ services:
     restart: unless-stopped
     environment:
       SERVER_PORT: 8080
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:mysql://host.docker.internal:3306/nexcart
+      SPRING_DATASOURCE_USERNAME: nexcart_app
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_FLYWAY_ENABLED: "false"
+      SPRING_CACHE_TYPE: ${SPRING_CACHE_TYPE:-redis}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:?Set RAZORPAY_KEY_ID in .env}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:?Set RAZORPAY_KEY_SECRET in .env}
@@ -40,9 +46,8 @@ services:
       OPENAPI_ENABLED: ${OPENAPI_ENABLED:-false}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8081}:8080"
-    depends_on:
-      mysql:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
       interval: 15s
@@ -80,5 +85,5 @@ services:
       retries: 10
 
 volumes:
-  mysql_data:
+  # mysql_data: # Kept on disk for later reconciliation; not mounted by this stack.
   redis_data:

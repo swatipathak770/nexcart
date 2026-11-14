@@ -16,6 +16,8 @@ public interface AddressRepository extends JpaRepository<Address, Long> {
     @EntityGraph(attributePaths = {"user"})
     Optional<Address> findById(Long id);
 
+    Optional<Address> findByIdAndUser(Long id, User user);
+
     Optional<Address> findByUserAndIsDefaultTrue(User user);
 
     boolean existsByIdAndUser(Long id, User user);

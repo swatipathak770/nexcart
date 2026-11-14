@@ -2,6 +2,7 @@ package com.nexcart.service;
 
 import com.nexcart.dto.request.PaymentRequest;
 import com.nexcart.dto.response.PaymentResponse;
+import com.nexcart.dto.response.PaymentCheckoutResponse;
 import com.nexcart.dto.request.PaymentVerificationRequest;
 import com.nexcart.dto.request.PaymentFailureRequest;
 
@@ -18,4 +19,6 @@ public interface PaymentService {
     PaymentResponse getPaymentByOrderId(Long orderId);
 
     PaymentResponse getPaymentById(Long paymentId);
+
+    PaymentCheckoutResponse getRetryCheckout(Long orderId);
 }

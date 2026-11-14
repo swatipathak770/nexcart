@@ -2,6 +2,7 @@ package com.nexcart.controller;
 
 import com.nexcart.dto.request.PaymentRequest;
 import com.nexcart.dto.response.PaymentResponse;
+import com.nexcart.dto.response.PaymentCheckoutResponse;
 import com.nexcart.dto.request.PaymentVerificationRequest;
 import com.nexcart.dto.request.PaymentFailureRequest;
 import com.nexcart.service.PaymentService;
@@ -43,6 +44,12 @@ public class PaymentController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(response);
+    }
+
+    @Operation(summary = "Get the active retry checkout for an owned order")
+    @PostMapping("/order/{orderId}/retry-checkout")
+    public ResponseEntity<PaymentCheckoutResponse> getRetryCheckout(@PathVariable Long orderId) {
+        return ResponseEntity.ok(paymentService.getRetryCheckout(orderId));
     }
 
     @Operation(summary = "Verify Razorpay Payment")
