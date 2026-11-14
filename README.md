@@ -191,7 +191,7 @@ sequenceDiagram
     RZ-->>UI: Payment ID and signature
     UI->>API: Submit payment for verification
     API->>API: Verify Razorpay payment signature
-    API->>DB: Mark payment and attempt successful; confirm order
+    API->>DB: Mark payment and attempt successful, then confirm order
 ```
 
 On failure or cancellation, the UI reports the result to the API; Razorpay can also report payment events through the signed webhook endpoint. Failure handling updates the current payment attempt and may create/analyze a recovery case.
