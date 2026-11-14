@@ -22,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -47,6 +49,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest
 @ActiveProfiles("test")
 class BackendApplicationTests {
+
+    @DynamicPropertySource
+    static void forceIsolatedInMemoryDatabase(DynamicPropertyRegistry properties) {
+        properties.add("spring.datasource.url", () -> "jdbc:h2:mem:backend-application-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false");
+        properties.add("spring.datasource.username", () -> "sa");
+        properties.add("spring.datasource.password", () -> "");
+        properties.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
+        properties.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        properties.add("spring.flyway.enabled", () -> "false");
+    }
 
     @Autowired
     private EntityManager entityManager;

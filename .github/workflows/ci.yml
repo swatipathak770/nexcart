@@ -10,31 +10,6 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_DATABASE: nexcart
-          MYSQL_USER: nexcart_app
-          MYSQL_PASSWORD: ci_database_password
-          MYSQL_ROOT_PASSWORD: ci_root_password
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -pci_root_password --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-          --health-start-period=20s
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=3s
-          --health-retries=10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -69,14 +44,9 @@ jobs:
       - name: Test and verify backend
         working-directory: backend
         env:
-          SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/nexcart
-          DB_USERNAME: nexcart_app
-          DB_PASSWORD: ci_database_password
           JWT_SECRET: ci-only-secret-at-least-thirty-two-characters-long
           RAZORPAY_KEY_ID: rzp_test_ci_key
           RAZORPAY_KEY_SECRET: ci-only-razorpay-secret
-          SPRING_DATA_REDIS_HOST: localhost
-          SPRING_DATA_REDIS_PORT: 6379
         run: ./mvnw -B -Pcoverage verify
 
       - name: Validate Docker Compose configuration
