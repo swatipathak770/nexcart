@@ -539,7 +539,7 @@ This is a plan only. No deployment URLs, cloud resources, provider connectivity,
 
 ## Author
 
-**[Your name]** · GitHub: [swatipathak770](https://github.com/swatipathak770) · LinkedIn: [Add your LinkedIn profile] · Contact: [Add a public contact address]
+**Swati Pathak** · GitHub: [swatipathak770](https://github.com/swatipathak770) · LinkedIn: https://www.linkedin.com/in/swati-pathak-061218282/ · Contact: pathakswati276@gmail.com
 
 ## Project documentation
 
