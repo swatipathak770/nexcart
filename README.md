@@ -13,7 +13,7 @@
 
 NexCart is a full-stack electronics commerce project built with React and Spring Boot. It demonstrates a complete customer checkout path and a RecoverAI workflow that turns payment failures into reviewable, bounded recovery actions.
 
-> **Project status:** Portfolio project with Razorpay Test Mode integration. No live deployment or production readiness is claimed. CI builds and verifies the project; it does not publish images or deploy services.
+
 
 ## Contents
 
@@ -30,7 +30,6 @@ NexCart is a full-stack electronics commerce project built with React and Spring
 - [Run the applications](#run-the-applications)
 - [Testing and CI](#testing-and-ci)
 - [Docker Compose](#docker-compose)
-- [Planned deployment](#planned-deployment)
 - [Future improvements](#future-improvements)
 - [Author](#author)
 
@@ -222,13 +221,13 @@ sequenceDiagram
 
 ## Screenshots
 
-These owner-provided captures show the local NexCart interface. The checkout delivery address and admin account name have been redacted. The RecoverAI dashboard is a local UI capture; its displayed values are not evidence of live payment transactions. No payment-link detail is included.
-
 ### Storefront and shopping
 
-![NexCart storefront home](docs/screenshots/home-storefront.jpg)
+![NexCart storefront home](<img width="1567" height="879" alt="image" src="https://github.com/user-attachments/assets/978bd5f6-289d-4d67-b5e8-36563dee6206" />
+)
 
-![NexCart product catalog](docs/screenshots/product-catalog.jpg)
+![NexCart product catalog](<img width="1470" height="880" alt="image" src="https://github.com/user-attachments/assets/eefb5628-9396-43db-8b8d-769f4b7d956d" />
+)
 
 ![NexCart category browser](docs/screenshots/category-browser.jpg)
 
@@ -515,18 +514,6 @@ Compose runs the backend, Nginx-served frontend, and Redis. It **does not start 
 The frontend is exposed on the configured `FRONTEND_PORT` (default `3000`); the backend host port defaults to `8081` and is bound to loopback. Nginx proxies `/api/` to Spring Boot. Compose includes Redis and configures the backend to use it by default; without Redis, the application can use simple in-process caching by setting `SPRING_CACHE_TYPE=simple`.
 
 Useful commands: `docker compose logs -f`, `docker compose logs -f backend`, and `docker compose down`. `docker compose down` stops containers but does not remove the named Redis volume.
-
-## Planned deployment
-
-The proposed portfolio topology is:
-
-- **Frontend:** Vercel static Vite site.
-- **Backend:** Render web service using the backend Dockerfile.
-- **Database:** separately provisioned MySQL 8 on an Oracle Cloud VM.
-- **Payments:** Razorpay Test Mode.
-- **Cache:** initially omit Redis and use simple in-process caching, or configure Redis if needed.
-
-This is a plan only. No deployment URLs, cloud resources, provider connectivity, TLS, backups, or production readiness have been verified. Hosting tiers and free-tier availability can change; do not treat this topology as a guarantee of zero cost. Keep the database private, configure HTTPS/CORS/webhook secrets, and run reviewed migrations as a deliberate deployment step before deploying backend code that requires the schema.
 
 ## Future improvements
 
